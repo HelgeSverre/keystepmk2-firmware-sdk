@@ -3,7 +3,7 @@ CC     ?= cc
 CFLAGS := -std=c11 -Wall -Wextra -Werror -O1 -g -fsanitize=address,undefined -I.. -I../../../include
 OUT    := ../../../build/mk2000-tests
 
-all: engine store arp clock
+all: engine store arp clock harmony
 
 engine: | $(OUT)
 	$(CC) $(CFLAGS) ../engine.c ../pattern.c engine_test.c -o $(OUT)/engine_test
@@ -24,4 +24,8 @@ clock: | $(OUT)
 	$(CC) $(CFLAGS) ../clock.c clock_test.c -o $(OUT)/clock_test
 	$(OUT)/clock_test
 
-.PHONY: all engine store arp clock
+harmony: | $(OUT)
+	$(CC) $(CFLAGS) ../harmony.c harmony_test.c -o $(OUT)/harmony_test
+	$(OUT)/harmony_test
+
+.PHONY: all engine store arp clock harmony

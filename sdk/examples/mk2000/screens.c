@@ -96,8 +96,14 @@ static void top_line(void) {
     } else {
         put(at, "--");
     }
-    text(SMALL, 0, TOP, line);
-    right(SMALL, TOP, mk_div_name[p->track[app.track].division]);
+    int x = text(SMALL, 0, TOP, line);
+    const char *division = mk_div_name[p->track[app.track].division];
+    right(SMALL, TOP, division);
+    int root, scale = app_scale(&root);                 /* the scale the keys are held to, where there is room */
+    if (!scale) return;
+    put(put(put(line, mk_root_name[root]), " "), mk_scale_short[scale]);
+    int room = KS_OLED_W - ks_font_width(SMALL, division) - x, width = ks_font_width(SMALL, line);
+    if (width + 8 <= room) text(SMALL, x + (room - width) / 2, TOP, line);
 }
 
 static void preset_text(char *at, int slot) {
@@ -240,6 +246,23 @@ static void arp_screen(void) {
     right(SMALL, LOW, mk_div_name[arp->division < MK_DIV_COUNT ? arp->division : MK_DIV_16]);
 }
 
+/* Chord held: the preset, or the keys played so far into the user chord. */
+static void chord_screen(void) {
+    const mk_chord_settings *chord = &app.settings.chord;
+    char line[24];
+    text(SMALL, 0, TOP, app.learning ? "User Chord" : "Chord");
+    right(SMALL, TOP, "hold + key");
+    if (app.learning) {
+        put(put_number(line, app.learning), app.learning == 1 ? " note" : " notes");
+        text(LARGE, 0, MID, line);
+    } else {
+        text(LARGE, 0, MID, mk_chord_name[chord->preset < MK_CHORD_COUNT ? chord->preset : 0]);
+        right(LARGE, MID, chord->on ? "On" : "Off");
+    }
+    text(SMALL, 0, LOW, "Keys: user chord");
+    right(SMALL, LOW, "turn: preset");
+}
+
 static void count_in_screen(void) {
     char line[16];
     put(put_number(put(line, "T"), app.track + 1), " Record");
@@ -259,6 +282,7 @@ void screens_draw(void) {
     case LAYER_SHIFT: slots_screen(); break;
     case LAYER_SAVE: save_screen(); break;
     case LAYER_ARP: arp_screen(); break;
+    case LAYER_CHORD: chord_screen(); break;
     case LAYER_HOME:
         if (pages_draw()) break;
         if (app_counting()) count_in_screen();
@@ -286,6 +310,7 @@ void lights_update(uint32_t buttons) {
 
     want[KS_LED_SEQ] = scale(track_colour[app.track], app.settings.seq_on ? bright : dim);
     want[KS_LED_ARP] = app.settings.arp_on ? scale(white, bright) : 0;
+    want[KS_LED_CHORD] = app.settings.chord.on ? scale(white, bright) : 0;
     want[KS_LED_PLAY] = playing && beat ? scale(0x00FF20, bright) : playing ? scale(0x00FF20, dim) : 0;
     want[KS_LED_STOP] = playing ? 0 : scale(white, dim);
     want[KS_LED_RECORD] = counting ? (beat ? scale(0xFF0000, bright) : 0) : app.recording ? scale(0xFF0000, bright) : app.settings.overdub ? scale(0xFF0000, dim) : 0;

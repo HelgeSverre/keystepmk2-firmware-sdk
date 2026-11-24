@@ -39,7 +39,7 @@ warnings.
 | Folder | What it is |
 |---|---|
 | `examples/hello` | Shows every control, plays the keys as MIDI notes. The template for `make new`. |
-| `examples/mk2000` | **KeyStep MK2000**, the full firmware: four tracks with ratchets, probability and conditions per step, channels changed with a held button and a numbered key, an arpeggiator, pattern chains, saved to flash. Design in [MK2000.md](../docs/MK2000.md); its engine, store and arpeggiator have host tests in `examples/mk2000/tests`. |
+| `examples/mk2000` | **KeyStep MK2000**, the full firmware: four tracks with ratchets, probability and conditions per step, channels changed with a held button and a numbered key, an arpeggiator, scales and chords, pattern chains, saved to flash. Design in [MK2000.md](../docs/MK2000.md); its engine, store, arpeggiator, clock and harmony have host tests in `examples/mk2000/tests`. |
 | `examples/screens` | The MK2000 screens as still pictures in the stock fonts; turn the encoder. |
 | `examples/seq4` | The first sketch of a four-track step sequencer: 16 steps, four notes per step, step and live recording, saved with Shift + Seq. Everything is on the display; the lights above the keys repeat it on the 37-key model. |
 | `examples/flashdump` | Sends the whole external flash out as SysEx (USB if connected, else DIN) for `tools/flashdump.py`: the backup of a unit's patterns, settings and calibration. Reads only. |

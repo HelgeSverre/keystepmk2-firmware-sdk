@@ -55,6 +55,14 @@ uint8_t app_keys_channel(void) {
     return app.settings.home_channel;
 }
 
+int app_scale(int *root) {
+    const mk_pattern *p = mk_engine_pattern();
+    int own = p->scale != MK_PATTERN_SCALE_GLOBAL;
+    int scale = own ? p->scale : app.settings.scale;
+    *root = (own ? p->root : app.settings.root) % 12;
+    return scale < MK_SCALE_COUNT ? scale : MK_SCALE_OFF;       /* MK_PATTERN_SCALE_OFF too */
+}
+
 void app_message(const char *text) {
     app.message = text;
     app.message_until = ks_millis() + 1200;
@@ -122,6 +130,8 @@ static uint32_t engine_random(void) {
     x ^= x << 5;
     return x;
 }
+
+uint32_t app_random(void) { return engine_random(); }
 
 /* The arp plays where the keys were pointing when each note started. */
 static uint8_t arp_channel[128];
@@ -590,7 +600,7 @@ int main(void) {
     ks_init();
     mk_store_init();
     app.settings = (mk_settings){ .version = MK_SETTINGS_VERSION, .keys_on_track = 1, .seq_on = 1, .brightness = 0x8D,
-                                   .arp = { .mode = MK_ARP_UP, .octaves = 1, .division = MK_DIV_16, .gate = 50, .swing = 50 } };
+                                   .arp = { .mode = MK_ARP_UP, .octaves = 1, .division = MK_DIV_16, .gate = 50, .swing = 50, .length = 16 } };
     mk_settings stored;
     if (mk_store_load_settings(&stored) == MK_STORE_OK && stored.version == MK_SETTINGS_VERSION) app.settings = stored;
     app.slot = app.settings.slot < MK_SLOTS ? app.settings.slot : 0;

@@ -5,8 +5,8 @@
 #include "mk.h"
 
 enum { REC_OFF, REC_STEP, REC_LIVE };
-enum { LAYER_HOME, LAYER_SHIFT, LAYER_CHANNEL, LAYER_TRACKS, LAYER_LENGTH, LAYER_SAVE, LAYER_ARP };
-enum { PAGE_NONE, PAGE_STEPS, PAGE_TRACK, PAGE_GLOBAL, PAGE_CHAIN };
+enum { LAYER_HOME, LAYER_SHIFT, LAYER_CHANNEL, LAYER_TRACKS, LAYER_LENGTH, LAYER_SAVE, LAYER_ARP, LAYER_CHORD };
+enum { PAGE_NONE, PAGE_STEPS, PAGE_TRACK, PAGE_GLOBAL, PAGE_CHAIN, PAGE_ARP, PAGE_CHORD, PAGE_SCALE };
 enum { PAGE_KEY_PLAYS, PAGE_KEY_USED, PAGE_KEY_TRACK };     /* what pages_key did with a key */
 #define NO_SLOT 0xFF
 #define FIRST_NUMBERED 4        /* keys 4-19 carry the numbers 1-16 */
@@ -36,6 +36,7 @@ typedef struct {
     mk_chain chain;             /* the chain of bank chain_bank, the bank in use */
     uint8_t chain_bank;
     uint8_t chain_dirty;        /* changed since it was last saved */
+    uint8_t learning;           /* Chord held: keys played into the user chord so far */
 } app_state;
 
 extern app_state app;
@@ -45,6 +46,8 @@ uint32_t app_lock(void);                        /* interrupts off; returns what 
 void app_unlock(uint32_t state);
 void app_note(uint8_t channel, uint8_t note, uint8_t velocity);     /* velocity 0 = off */
 uint8_t app_keys_channel(void);                 /* where the keys go right now */
+int app_scale(int *root);                       /* the scale in force (MK_SCALE_, the pattern's or the global one) and its root */
+uint32_t app_random(void);
 void app_message(const char *text);
 void app_select_slot(int slot);                 /* by hand: load it, hand it to the engine, chain off */
 void app_start(void);                           /* Play: from the top, on the chain's first pattern if it is on */

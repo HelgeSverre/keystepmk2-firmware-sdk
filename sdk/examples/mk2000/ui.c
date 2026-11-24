@@ -8,10 +8,18 @@ enum { KEY_FREE, KEY_NOTE, KEY_SOLO, KEY_ARP, KEY_LATCHED };
 
 static uint32_t previous;
 static uint32_t seq_at, stop_at;        /* when a button that may turn out to be a tap went down */
-static uint32_t arp_at;
-static uint8_t arp_alone;
+static uint32_t arp_at, chord_at;
+static uint8_t arp_alone, chord_alone;
 static uint8_t seq_alone, combo_used;   /* Seq went down by itself; something was done while a layer was held */
-static uint8_t key_role[KS_KEYS], key_note[KS_KEYS], key_channel[KS_KEYS];
+/* What each key that is down plays: one note, or in chord mode the chord, in the order it is
+ * strummed. `key_sent` of them have been switched on; the rest follow, one every strum time. */
+static uint8_t key_role[KS_KEYS], key_channel[KS_KEYS], key_velocity[KS_KEYS];
+static uint8_t key_notes[KS_KEYS][MK_CHORD_NOTES], key_count[KS_KEYS], key_sent[KS_KEYS];
+static uint32_t key_due[KS_KEYS];       /* when the next note of its chord is to start */
+/* Two keys can hold the same pitch in chord mode: how many do, and where it sounds, so it ends
+ * when the last of them lets go. The same for the pitches the keys have put into the arp. */
+static uint8_t sounding[128], sounding_channel[128], in_arp[128];
+static uint8_t learned[MK_CHORD_NOTES]; /* Chord held: the keys played into the user chord */
 static uint8_t chord_keys, chord_tie;   /* step recording: keys of the chord still down; Hold was pressed with them */
 static uint8_t rec_started;             /* this recording has taken its first note */
 static uint8_t rec_replacing;           /* and it started the track over */
@@ -107,17 +115,18 @@ static void step_advance(void) {
     edited();
 }
 
-static void record_note(uint8_t note, uint8_t velocity) {
+/* What one key played: a note, or its chord in chord mode. */
+static void record_key(const uint8_t *notes, int n, uint8_t velocity) {
     if (app.recording == REC_LIVE && !mk_engine_playing()) return;     /* still counting in */
     if (!rec_started) record_first_note();
     if (app.recording == REC_LIVE) {
-        if (mk_engine_playing()) mk_engine_record(app.track, note, velocity, !app.settings.rec_unquantized);
+        for (int i = 0; i < n; i++) mk_engine_record(app.track, notes[i], velocity, !app.settings.rec_unquantized);
         app.dirty = 1;
         return;
     }
     mk_step *step = &track()->step[app.rec_cursor];
     if (!chord_keys++) step_empty(step);                /* a new chord replaces what the step held */
-    step_add(step, note, velocity);
+    for (int i = 0; i < n; i++) step_add(step, notes[i], velocity);
     if (rec_replacing && track()->length <= app.rec_cursor) track()->length = (uint8_t)(app.rec_cursor + 1);
     edited();
 }
@@ -229,16 +238,47 @@ static int keys_down_as(uint8_t role) {
     return n;
 }
 
+/* A pitch goes on for one more key. One already sounding is struck again. */
+static void pitch_on(uint8_t channel, uint8_t note, uint8_t velocity) {
+    if (sounding[note]) app_note(sounding_channel[note], note, 0);
+    sounding[note]++;
+    sounding_channel[note] = channel;
+    app_note(channel, note, velocity);
+}
+
+static void pitch_off(uint8_t note) {
+    if (sounding[note] && !--sounding[note]) app_note(sounding_channel[note], note, 0);
+}
+
+/* The notes of a key's chord that are due. With no strum time that is all of them at once. */
+static void strum(int key, uint32_t now) {
+    while (key_sent[key] < key_count[key] && (int32_t)(now - key_due[key]) >= 0) {
+        pitch_on(key_channel[key], key_notes[key][key_sent[key]++], key_velocity[key]);
+        key_due[key] += app.settings.chord.strum;
+    }
+}
+
+/* End what a key played. Notes of its chord not yet strummed never start. */
+static void key_silence(int key) {
+    for (int i = 0; i < key_sent[key]; i++) pitch_off(key_notes[key][i]);
+    key_count[key] = key_sent[key] = 0;
+}
+
 /* Hold with the arp off: notes stay on after their keys are let go, until this. */
 static void release_latched(void) {
     for (int key = 0; key < KS_KEYS; key++) {
         if (key_role[key] != KEY_LATCHED) continue;
         key_role[key] = KEY_FREE;
-        app_note(key_channel[key], key_note[key], 0);
+        key_silence(key);
     }
 }
 
-static void key_down(int key, uint8_t velocity, uint32_t buttons) {
+static void arp_forget(void) {
+    mk_arp_clear();
+    for (int note = 0; note < 128; note++) in_arp[note] = 0;
+}
+
+static void key_down(int key, uint8_t velocity, uint32_t buttons, uint32_t now) {
     int number = key - FIRST_NUMBERED;                  /* 0-15 on the numbered keys */
     int numbered = key >= FIRST_NUMBERED && key < FIRST_EDIT;
     app.redraw = 1;
@@ -300,37 +340,61 @@ static void key_down(int key, uint8_t velocity, uint32_t buttons) {
         }
         app.settings_dirty = 1;
         return;
+    case LAYER_CHORD: {                                 /* the keys played while Chord is held become the user chord */
+        int played = 53 + key + 12 * app.octave;
+        combo_used = 1;
+        if (played >= 0 && played <= 127 && app.learning < MK_CHORD_NOTES) learned[app.learning++] = (uint8_t)played;
+        return;
+    }
     default:
         break;
     }
 
     int note = 53 + key + 12 * app.octave;              /* key 0 is F3 */
     if (note < 0 || note > 127) return;
+    int root, scale = app_scale(&root);
+    note = mk_scale_fit(note, scale, root);
     int use = pages_key(key, (uint8_t)note, velocity, (buttons & KS_BTN_SHIFT) != 0);
     if (use == PAGE_KEY_USED) return;
     if (use == PAGE_KEY_PLAYS && app.transpose_hold && !app.recording) {
         mk_engine_transpose(app.track, note - transpose_root());
         return;
     }
-    key_note[key] = (uint8_t)note;
+    if (key_role[key] == KEY_LATCHED) key_silence(key); /* a latched key played again starts afresh */
+    uint8_t *notes = key_notes[key];
+    int n = 1;
+    notes[0] = (uint8_t)note;
+    if (use == PAGE_KEY_PLAYS && app.settings.chord.on) n = mk_chord_notes(&app.settings.chord, note, scale, root, notes);
+    key_count[key] = (uint8_t)n;
+    key_sent[key] = 0;
+    key_velocity[key] = velocity;
     if (use == PAGE_KEY_PLAYS && app.settings.arp_on && !app.recording) {
         key_role[key] = KEY_ARP;
-        mk_arp_key((uint8_t)note, velocity);
+        for (int i = 0; i < n; i++) {
+            in_arp[notes[i]]++;
+            mk_arp_key(notes[i], velocity);
+        }
         return;
     }
     if (app.latch && !keys_down_as(KEY_NOTE)) release_latched();    /* a new chord replaces the latched one */
     key_role[key] = KEY_NOTE;
     key_channel[key] = use == PAGE_KEY_TRACK ? track()->channel : app_keys_channel();
-    app_note(key_channel[key], (uint8_t)note, velocity);
-    if (use == PAGE_KEY_PLAYS && app.recording) record_note((uint8_t)note, velocity);
+    if (use == PAGE_KEY_PLAYS && app.recording) record_key(notes, n, velocity);     /* low to high, at once */
+    mk_chord_order(notes, n, app.settings.chord.strum_type, app_random);
+    key_due[key] = now;
+    strum(key, now);
 }
 
 static void key_up(int key) {
     uint8_t role = key_role[key];
     if (role == KEY_LATCHED) return;                    /* pressed again while latched: already handled */
     key_role[key] = KEY_FREE;
-    if (role == KEY_ARP) {
-        mk_arp_key(key_note[key], 0);
+    if (role == KEY_ARP) {                              /* a pitch another key still holds stays in */
+        for (int i = 0; i < key_count[key]; i++) {
+            uint8_t note = key_notes[key][i];
+            if (in_arp[note] && !--in_arp[note]) mk_arp_key(note, 0);
+        }
+        key_count[key] = 0;
         return;
     }
     if (role == KEY_NOTE && app.latch && !app.recording) {
@@ -342,7 +406,7 @@ static void key_up(int key) {
         mk_engine_solo(app.solo);
         app.redraw = 1;
     } else if (role == KEY_NOTE) {
-        app_note(key_channel[key], key_note[key], 0);   /* on the channel it was played on */
+        key_silence(key);                               /* on the channel it was played on */
         pages_key_up(key);
         if (app.recording == REC_STEP && chord_keys && !--chord_keys) step_advance();
     }
@@ -387,6 +451,10 @@ static void turned(int by, uint32_t buttons) {
         edited();
     } else if (app.layer == LAYER_TRACKS) {
         pages_open(PAGE_STEPS, buttons);
+    } else if (app.layer == LAYER_CHORD) {
+        int preset = app.settings.chord.preset + by;
+        app.settings.chord.preset = (uint8_t)(preset < 0 ? 0 : preset >= MK_CHORD_COUNT ? MK_CHORD_COUNT - 1 : preset);
+        app.settings_dirty = 1;
     } else if (buttons & KS_BTN_TEMPO) {
         tempo_tapped = 0;                               /* that press was to turn, not a tap */
         set_tempo(mk_engine_pattern()->tempo + 10 * by);
@@ -471,6 +539,16 @@ static void pressed_button(uint32_t button, uint32_t buttons, uint32_t now) {
         arp_at = now;
         combo_used = 0;
         break;
+    case KS_BTN_CHORD:
+        if (others == KS_BTN_SHIFT) {                   /* the stock gesture */
+            pages_open(PAGE_SCALE, buttons);
+            break;
+        }
+        chord_alone = !others;
+        chord_at = now;
+        combo_used = 0;
+        app.learning = 0;
+        break;
     case KS_BTN_BACK:
         if (app.layer == LAYER_SAVE) app.layer = LAYER_HOME;
         else if (pages_active()) pages_back();
@@ -483,6 +561,9 @@ static void pressed_button(uint32_t button, uint32_t buttons, uint32_t now) {
         } else if (app.layer == LAYER_TRACKS) {
             combo_used = 1;
             pages_open(PAGE_TRACK, buttons);
+        } else if (app.layer == LAYER_ARP || app.layer == LAYER_CHORD) {
+            combo_used = 1;
+            pages_open(app.layer == LAYER_ARP ? PAGE_ARP : PAGE_CHORD, buttons);
         } else if (app.layer != LAYER_HOME) {
             break;
         } else if (pages_active()) {
@@ -518,11 +599,27 @@ static void released_button(uint32_t button, uint32_t now) {
     if (button == KS_BTN_ARP && arp_alone && !combo_used && now - arp_at < TAP_MS) {
         app.settings.arp_on = !app.settings.arp_on;
         app.settings_dirty = 1;
-        if (!app.settings.arp_on) mk_arp_clear();
+        if (!app.settings.arp_on) arp_forget();
         app_message(app.settings.arp_on ? mk_arp_mode_name[app.settings.arp.mode] : "Arp Off");
+    }
+    if (button == KS_BTN_CHORD && chord_alone) {
+        mk_chord_settings *chord = &app.settings.chord;
+        if (app.learning) {                             /* keys were played: they are the user chord, as in stock */
+            mk_chord_learn(chord, learned, app.learning);
+            chord->preset = MK_CHORD_USER;
+            chord->on = 1;
+            app.settings_dirty = 1;
+            app_message("User Chord Recorded");
+        } else if (!combo_used && now - chord_at < TAP_MS) {
+            chord->on = !chord->on;
+            app.settings_dirty = 1;
+            app_message(chord->on ? "Chord On" : "Chord Off");
+        }
+        app.learning = 0;
     }
     if (button == KS_BTN_SEQ) seq_alone = 0;
     if (button == KS_BTN_ARP) arp_alone = 0;
+    if (button == KS_BTN_CHORD) chord_alone = 0;
 }
 
 /* A page keeps every control while the buttons that opened it are still down: Shift + Play
@@ -537,6 +634,7 @@ static uint8_t layer_for(uint32_t buttons) {
     }
     if (buttons & KS_BTN_SEQ) return LAYER_TRACKS;
     if (buttons & KS_BTN_ARP && arp_alone) return LAYER_ARP;
+    if (buttons & KS_BTN_CHORD && chord_alone) return LAYER_CHORD;
     return LAYER_HOME;
 }
 
@@ -566,7 +664,9 @@ void ui_poll(void) {
 
     ks_key_event event;
     while (ks_key_get(&event)) {
-        if (event.on) key_down(event.key, event.velocity, buttons);
+        if (event.on) key_down(event.key, event.velocity, buttons, now);
         else key_up(event.key);
     }
+    for (int key = 0; key < KS_KEYS; key++)             /* chords being strummed */
+        if (key_sent[key] < key_count[key] && (key_role[key] == KEY_NOTE || key_role[key] == KEY_LATCHED)) strum(key, now);
 }

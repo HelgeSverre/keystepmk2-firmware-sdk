@@ -25,30 +25,37 @@ class Reader:
     def __init__(self, image: Path = fontextract.STOCK):
         self.fonts = []
         for font in fontextract.find(image):
-            glyphs = []
+            cells = {}
             for code, (width, _data) in enumerate(font.glyphs, font.first):
                 if not width or code > 0x7E or chr(code) in "^`~_'\"":  # marks a frame's corners read as
                     continue
-                rows = [int(r, 2) for r in font.rows(code)]
-                glyphs.append((chr(code), width, rows, sum(r.bit_count() for r in rows)))
+                cells[chr(code)] = (width, [int(r, 2) for r in font.rows(code)])
+            inked = [r for _w, rows in cells.values() for r in range(font.height) if rows[r]]
+            top, bottom = min(inked), max(inked)
+            base = max(r for r in range(font.height) if cells["E"][1][r])  # the baseline
+            # A glyph is compared down to the baseline, and below it only as far as it has ink:
+            # the rows of the descenders may hold the top of whatever is drawn underneath.
+            glyphs = []
+            for char, (width, rows) in cells.items():
+                last = max([r for r in range(font.height) if rows[r]] + [base])
+                glyphs.append((char, width, rows, sum(r.bit_count() for r in rows), range(top, last + 1)))
             glyphs.sort(key=lambda g: -g[3])  # most ink first, so "B" is tried before "I"
-            inked = [r for _c, _w, rows, _i in glyphs for r in range(font.height) if rows[r]]
-            self.fonts.append((font.height, glyphs, range(min(inked), max(inked) + 1)))
+            self.fonts.append((font.height, glyphs, range(top, bottom + 1)))
 
     def width(self, height: int, text: str) -> int:
-        widths = next({c: w for c, w, _r, _i in g} for h, g, _u in self.fonts if h == height)
+        widths = next({c: w for c, w, *_rest in g} for h, g, _u in self.fonts if h == height)
         return sum(widths[c] for c in text)
 
     def read_lines(self, board) -> list[tuple[int, int, int, str]]:
         """(y, x, font height, text) for each run of text, top to bottom."""
         rows = [sum(board.oled.pixel(x, y) << (WIDTH - 1 - x) for x in range(WIDTH)) for y in range(HEIGHT)]
         found = []
-        for height, glyphs, used in self.fonts:  # rows no glyph inks may hold a neighbouring line
+        for height, glyphs, _used in self.fonts:  # rows no glyph inks may hold a neighbouring line
             for y in range(HEIGHT - height + 1):
                 # best[x]: the reading from column x with the most ink, as (ink, glyph, next column)
                 best: list[tuple[int, str, int] | None] = [None] * (WIDTH + 1)
                 for x in range(WIDTH - 1, -1, -1):
-                    for char, width, grows, gink in glyphs:
+                    for char, width, grows, gink, used in glyphs:
                         if x + width > WIDTH:
                             continue
                         shift, mask = WIDTH - x - width, (1 << width) - 1

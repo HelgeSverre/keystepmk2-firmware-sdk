@@ -82,7 +82,7 @@ static const mk_arp_io io = { io_note, io_random };
 static mk_arp_settings set;
 
 static void setup(void) {
-    set = (mk_arp_settings){ MK_ARP_UP, 1, MK_DIV_16, 50, 50, { 0, 0, 0 } };
+    set = (mk_arp_settings){ MK_ARP_UP, 1, MK_DIV_16, 50, 50, 0, 1, 0 };    /* free running: no Arp Length */
     logged = 0;
     now = 0;
     script_len = script_pos = draws = 0;
@@ -273,6 +273,63 @@ static void test_orders(void) {
         CHECK_EQ(unmatched, 0);
     }
     ok("every mode with 1, 2 and 3 keys over 1 and 2 octaves", before);
+}
+
+/* Arp Length: the pattern starts again after that many steps; the stock firmware with three keys
+ * and a length of 4 plays 60 64 67 60, 60 64 67 60. With Arp Retrigger off it runs on. */
+static void test_length(void) {
+    int before = failures;
+    static const uint8_t four[10] = { 60, 64, 67, 60, 60, 64, 67, 60, 60, 64 };
+    static const uint8_t one[4] = { 60, 60, 60, 60 };
+    static const uint8_t down[6] = { 67, 64, 60, 67, 67, 64 };
+    static const uint8_t free_[8] = { 60, 64, 67, 60, 64, 67, 60, 64 };
+    static const uint8_t sixteen[18] = { 60, 64, 67, 60, 64, 67, 60, 64, 67, 60, 64, 67, 60, 64, 67, 60, 60, 64 };
+    static const struct {
+        uint8_t mode, length, free_run;
+        const uint8_t *want;
+        int n;
+    } cases[] = {
+        { MK_ARP_UP, 4, 0, four, 10 },   { MK_ARP_UP, 1, 0, one, 4 },        { MK_ARP_DOWN, 4, 0, down, 6 },
+        { MK_ARP_UP, 4, 1, free_, 8 },   { MK_ARP_UP, 0, 0, sixteen, 18 },   { MK_ARP_UP, 16, 0, sixteen, 18 },
+        { MK_ARP_ORDER, 4, 0, four, 10 },
+    };
+    for (size_t c = 0; c < sizeof cases / sizeof cases[0]; c++) {
+        setup();
+        set.mode = cases[c].mode;
+        set.length = cases[c].length;
+        set.free_run = cases[c].free_run;
+        mk_arp_key(60, 100);
+        mk_arp_key(64, 100);
+        mk_arp_key(67, 100);
+        run(20 * 24);
+        uint8_t got[64];
+        int n = pitches(got, 64);
+        CHECK(n >= cases[c].n);
+        for (int i = 0; i < cases[c].n && i < n; i++) CHECK_EQ(got[i], cases[c].want[i]);
+        uint32_t ticks[64];
+        int m = collect(ON, -1, ticks, 64);
+        for (int i = 0; i < m; i++) CHECK_EQ(ticks[i], (uint32_t)i * 24);     /* the grid is not touched */
+        CHECK_EQ(doubled, 0);
+        CHECK_EQ(unmatched, 0);
+    }
+    setup();                            /* releasing every key starts the count again */
+    set.length = 4;
+    set.free_run = 0;
+    mk_arp_key(60, 100);
+    mk_arp_key(64, 100);
+    run(3 * 24);                        /* 60 64 60 */
+    mk_arp_key(60, 0);
+    mk_arp_key(64, 0);
+    run(24);
+    logged = 0;
+    mk_arp_key(60, 100);
+    mk_arp_key(64, 100);
+    mk_arp_key(67, 100);
+    run(5 * 24);
+    uint8_t got[16];
+    CHECK(pitches(got, 16) >= 5);
+    for (int i = 0; i < 5; i++) CHECK_EQ(got[i], four[i]);
+    ok("Arp Length restarts the pattern, Retrigger off lets it run", before);
 }
 
 static void test_names(void) {
@@ -547,14 +604,14 @@ static void test_settings_change(void) {
     CHECK_EQ(doubled + unmatched, 0);
     /* out of range: mode Up, 4 octaves, 1/16, gate 90, swing 75 */
     setup();
-    set = (mk_arp_settings){ 200, 9, 99, 255, 255, { 0, 0, 0 } };
+    set = (mk_arp_settings){ 200, 9, 99, 255, 255, 0, 1, 0 };
     mk_arp_key(60, 100);
     run(4 * 48);
     EXPECT_PITCHES(60, 72, 84, 96, 60, 72, 84, 96);
     EXPECT_TICKS(ON, 60, 0, 96);
     EXPECT_TICKS(ON, 72, 36, 132);                      /* swing 75 */
     EXPECT_TICKS(OFF, 60, 21, 117);                     /* 90% of 24 */
-    set = (mk_arp_settings){ 0, 0, 0, 0, 0, { 0, 0, 0 } };      /* 1 octave, 1/2D, gate 10, swing 50 */
+    set = (mk_arp_settings){ 0, 0, 0, 0, 0, 0, 1, 0 };      /* 1 octave, 1/2D, gate 10, swing 50 */
     run(300);                                           /* the next step, at 192, lasts 288 */
     EXPECT_TICKS(ON, 60, 0, 96, 192, 480);
     EXPECT_TICKS(OFF, 60, 21, 117, 192 + 28);
@@ -694,7 +751,10 @@ static void test_soak(void) {
         case 14: set.division = (uint8_t)roll(MK_DIV_COUNT + 1); break;
         case 15: set.gate = (uint8_t)(roll(8) ? 10 + roll(81) : roll(256)); break;
         case 16: set.swing = (uint8_t)(roll(8) ? 50 + roll(26) : roll(256)); break;
-        case 17: if (roll(20) == 0) mk_arp_clear(); break;
+        case 17:
+            if (roll(20) == 0) mk_arp_clear();
+            else if (roll(4) == 0) set.length = (uint8_t)roll(70), set.free_run = (uint8_t)roll(2);
+            break;
         case 18: if (roll(10) == 0) mk_arp_sync(); break;
         default: mk_arp_key(note, 0); down[note] = 0; break;     /* up for a key never down too */
         }
@@ -712,6 +772,7 @@ static void test_soak(void) {
 int main(void) {
     test_names();
     test_orders();
+    test_length();
     test_gate();
     test_swing();
     test_first_key_waits();

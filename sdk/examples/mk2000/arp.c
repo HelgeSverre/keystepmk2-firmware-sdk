@@ -18,6 +18,9 @@
  * nothing: a gate is shorter than its step), so a pitch is never on twice and every on gets one
  * off, whatever happens to the settings, the keys or the grid in between.
  *
+ * Arp Length: with Arp Retrigger on (free_run 0), the pattern starts from its beginning again
+ * after that many steps, as the stock firmware's does; the grid is not touched.
+ *
  * Releasing the last key (hold off) lets the sounding note run to its normal gate end; the arp is
  * then idle. mk_arp_clear ends the sounding notes at once. */
 #include "mk.h"
@@ -48,6 +51,7 @@ static uint8_t oct;             /* the octave being played, 0 to octaves - 1 */
 static uint8_t last;
 static int8_t pos;
 static uint8_t falling;         /* UpDown is on its way down */
+static uint8_t steps;           /* steps played since the pattern last started from its beginning */
 
 /* The grid. */
 static uint8_t fresh;           /* the next tick begins a step, the first of a swing pair */
@@ -96,6 +100,7 @@ static int mode_of(void) { return settings->mode < MK_ARP_MODES ? settings->mode
 static int octaves_of(void) { return settings->octaves < 1 ? 1 : settings->octaves > 4 ? 4 : settings->octaves; }
 static int ticks_of(void) { return mk_div_ticks[settings->division < MK_DIV_COUNT ? settings->division : MK_DIV_16]; }
 static int gate_of(void) { return settings->gate < 10 ? 10 : settings->gate > 90 ? 90 : settings->gate; }
+static int length_of(void) { return settings->length < 1 ? 16 : settings->length > 64 ? 64 : settings->length; }
 static int swing_of(void) { return settings->swing < 50 ? 50 : settings->swing > 75 ? 75 : settings->swing; }
 
 /* ---- sounding notes ---- */
@@ -189,6 +194,9 @@ static void play_key(int i, int octave) {
 /* Choose and sound the notes of a step that is beginning. */
 static void play_step(void) {
     if (!held) return;
+    if (!settings->free_run && steps >= length_of()) restart = 1;      /* Arp Length, as in the stock firmware */
+    if (restart) steps = 0;
+    steps++;
     int mode = mode_of(), octaves = octaves_of(), n = held;
     uint8_t sorted[KEYS];
     sort_keys(sorted);
@@ -277,7 +285,7 @@ void mk_arp_init(mk_arp_settings *s, const mk_arp_io *callbacks) {
     hold = 0;
     sounding = 0;
     restart = 1;
-    oct = last = falling = 0;
+    oct = last = falling = steps = 0;
     pos = -1;
     fresh = 1;
     second = 0;

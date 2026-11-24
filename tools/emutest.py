@@ -997,6 +997,227 @@ def check_mk_global_menu() -> str:
     return "overdub, keys on Home, home channel, a held layer over the page, tempo on pattern change"
 
 
+# ---- MK2000: scales, chords and the arp settings ----
+
+KEYS_FROM_C = [f"k{k}" for k in range(7, 19)]  # C4 to B4
+
+
+def struck(board: emu.Board, key: str, ms: float = 60) -> list[int]:
+    """The notes a key switches on while it is held for `ms`; it is let go afterwards."""
+    board.midi_out.clear()
+    board.press(key)
+    board.run(ms)
+    found = [n for _c, n in notes(board)]
+    board.release(key)
+    board.run(40)
+    board.midi_out.clear()
+    return found
+
+
+def held_page(board: emu.Board, button: str) -> None:
+    hold(board, button)
+    tap(board, "encoder")
+    let_go(board, button)
+
+
+def check_mk_scale() -> str:
+    board = mk2000()
+    shift_key(board, "chord")
+    assert shows(board, "Scale") and shows(board, "Global Scale"), all_text(board)
+    menu_set(board, "Global Scale", 2)
+    tap(board, "back")
+    minor = [struck(board, key) for key in KEYS_FROM_C]
+    assert minor == [[60 + n] for n in (0, 0, 2, 3, 3, 5, 5, 7, 8, 8, 10, 10)], f"C minor, as stock plays it: {minor}"
+    assert "C Min" in small_text(board), f"the scale is on the home screen: {small_text(board)}"
+    shift_key(board, "chord")
+    menu_set(board, "Global Root", 2)
+    tap(board, "back")
+    d_minor = [struck(board, key) for key in ("k8", "k10", "k11", "k15")]  # C#, D#, E, G#
+    assert d_minor == [[60], [62], [64], [67]], f"D minor: {d_minor}"
+    shift_key(board, "chord")
+    menu_set(board, "Pattern Scale", 1)  # from Global to Major, root C
+    tap(board, "back")
+    assert [struck(board, key) for key in ("k8", "k10", "k13")] == [[60], [62], [65]], "the pattern's scale wins"
+    assert "C Maj" in small_text(board), small_text(board)
+    shift_key(board, "chord")
+    menu_set(board, "Pattern Root", 7)
+    menu_set(board, "Pattern Scale", 10)  # Pentatonic Minor on G: G A# C D F
+    tap(board, "back")
+    penta = [struck(board, key)[0] for key in KEYS_FROM_C]
+    assert penta == [60, 60, 62, 62, 65, 65, 65, 67, 67, 70, 70, 70], f"G minor pentatonic: {penta}"
+    mk_record_steps(board, ("k8", "k11"))  # what is recorded is what sounded
+    assert played(board)[:2] == [60, 65], "recording takes the fitted notes"
+    save_pattern(board)
+    shift_key(board, "chord")
+    menu_set(board, "Pattern Scale", -20)  # Off
+    tap(board, "back")
+    assert struck(board, "k8") == [61], "Pattern Scale Off: every key, whatever the global scale"
+    shift_key(board, "k29")  # Reload
+    board.run(200)
+    assert struck(board, "k8") == [60], "the scale is saved with the pattern"
+    tap(board, "arp")
+    board.midi_out.clear()
+    for key in ("k7", "k8", "k11"):  # C, C#, E: fitted to C, C, F
+        board.press(key)
+        board.run(20)
+    board.run(700)
+    arp = {n for _c, n in notes(board)}
+    assert arp == {60, 65}, f"the arp plays the fitted notes: {arp}"
+    return "global and pattern scale and root on the keys, recording and the arp; saved with the pattern"
+
+
+def check_mk_chord() -> str:
+    board = mk2000()
+    tap(board, "chord")
+    assert shows(board, "Chord On"), all_text(board)
+    assert struck(board, "k7") == [60], "the user chord starts empty: the key alone, as stock"
+    hold(board, "chord")
+    assert shows(board, "User"), all_text(board)
+    turn(board, 3)
+    assert shows(board, "Maj"), all_text(board)
+    let_go(board, "chord")
+    board.midi_out.clear()
+    board.press("k7")
+    board.run(60)
+    board.release("k7")
+    board.run(60)
+    data = bytes(board.midi_out)
+    assert [n for _c, n in notes(board)] == [60, 64, 67] and balanced(data) and data.count(0x80) == 3, data.hex()
+    # two keys sharing a pitch: C major and E minor both hold E and G
+    held_page(board, "chord")
+    assert shows(board, "Chord") and shows(board, "Preset"), all_text(board)
+    menu_set(board, "Preset", 1)  # min
+    tap(board, "back")
+    board.press("k11")
+    board.run(60)
+    board.midi_out.clear()
+    held_page(board, "chord")
+    menu_set(board, "Preset", -1)
+    tap(board, "back")
+    board.press("k7")
+    board.run(60)
+    board.release("k7")
+    board.run(60)
+    data = bytes(b for b in board.midi_out if b < 0xF8)
+    state: dict[int, bool] = {}
+    for i in range(0, len(data) - 2, 3):
+        state[data[i + 1]] = data[i] & 0xF0 == 0x90
+    assert state == {60: False, 64: True, 67: True}, f"E and G stay on for the key still down: {state}"
+    board.release("k11")
+    board.run(60)
+    data = bytes(b for b in board.midi_out if b < 0xF8)
+    for i in range(0, len(data) - 2, 3):
+        state[data[i + 1]] = data[i] & 0xF0 == 0x90
+    assert not any(state.values()), f"everything ends with the last key: {state}"
+    board.midi_out.clear()
+    # strum
+    held_page(board, "chord")
+    menu_set(board, "Strum (ms)", 10)
+    menu_set(board, "Strum Type", 2)
+    assert shows(board, "Down"), all_text(board)
+    tap(board, "back")
+    board.press("k7")
+    strummed = timed_notes(board, 100)
+    board.release("k7")
+    board.run(60)
+    assert [n for _t, n in strummed] == [67, 64, 60], strummed
+    gaps = [b[0] - a[0] for a, b in itertools.pairwise(strummed)]
+    assert all(near(g, 20, 3) for g in gaps), f"20 ms from note to note, as stock: {gaps}"
+    board.midi_out.clear()
+    board.press("k7")
+    board.run(30)
+    board.release("k7")
+    board.run(100)
+    data = bytes(board.midi_out)
+    assert [n for _c, n in notes(board)] == [67, 64] and balanced(data), "a key let go mid-strum: the rest never starts"
+    held_page(board, "chord")
+    menu_set(board, "Strum (ms)", -40)
+    menu_set(board, "Strum Type", -2)
+    menu_set(board, "Voicing", 1)
+    tap(board, "back")
+    assert struck(board, "k9") == [50, 62, 66, 69], "Bass -1: the root an octave down as well"
+    held_page(board, "chord")
+    menu_set(board, "Voicing", -1)
+    tap(board, "back")
+    # the user chord, the stock way: Chord held, keys played
+    hold(board, "chord")
+    for key in ("k14", "k7", "k10"):
+        tap(board, key)
+    assert shows(board, "User Chord") and shows(board, "3 notes"), all_text(board)
+    let_go(board, "chord")
+    assert shows(board, "User Chord Recorded"), all_text(board)
+    assert struck(board, "k9") == [62, 65, 69], "the user chord moves with the key"
+    # in a scale every note of the chord is fitted, as stock does
+    shift_key(board, "chord")
+    menu_set(board, "Global Scale", 1)
+    tap(board, "back")
+    assert struck(board, "k7") == [60, 62, 67], "C minor shape in C major: Eb comes down to D"
+    shift_key(board, "chord")
+    menu_set(board, "Global Scale", -1)
+    tap(board, "back")
+    # step recording takes the chord; the arp plays over it
+    mk_record_steps(board, ("k7", "k9"))
+    first = [n for _t, _c, n, v in play_from_top(board, 200) if v]
+    assert sorted(first[:3]) == [60, 63, 67] and sorted(first[3:6]) == [62, 65, 69], f"chords in the steps: {first}"
+    tap(board, "arp")
+    board.midi_out.clear()
+    board.press("k7")
+    board.run(700)
+    arp = [n for _c, n in notes(board)]
+    board.release("k7")
+    board.run(200)
+    assert arp[:6] == [60, 63, 67] * 2, f"the arp runs over the chord of one key: {arp}"
+    tap(board, "arp")
+    tap(board, "chord")
+    assert shows(board, "Chord Off") and struck(board, "k7") == [60], all_text(board)
+    return "presets, shared pitches, strum, voicing, user chord, chords in a scale, in steps and in the arp"
+
+
+def check_mk_arp_settings() -> str:
+    board = mk2000()
+    tap(board, "arp")
+
+    def arp_notes(ms: float) -> list[int]:
+        board.midi_out.clear()
+        for key in ("k7", "k11", "k14"):
+            board.press(key)
+        board.run(ms)
+        found = [n for _c, n in notes(board)]
+        for key in ("k7", "k11", "k14"):
+            board.release(key)
+        board.run(200)
+        return found
+
+    held_page(board, "arp")
+    assert shows(board, "Arp Settings") and shows(board, "Arp Length"), all_text(board)
+    assert shows(board, "l6 steps"), f"16 steps to begin with, as stock: {all_text(board)}"
+    menu_set(board, "Arp Length", -12)
+    tap(board, "back")
+    four = arp_notes(1400)
+    assert four[:10] == [60, 64, 67, 60, 60, 64, 67, 60, 60, 64], f"Arp Length 4, as stock plays it: {four}"
+    held_page(board, "arp")
+    menu_set(board, "Arp Retrigger", -1)
+    tap(board, "back")
+    free = arp_notes(1400)
+    assert free[:10] == [60, 64, 67] * 3 + [60], f"Arp Retrigger Off: {free}"
+    held_page(board, "arp")
+    menu_set(board, "Mode", 1)
+    menu_set(board, "Octaves", 1)
+    menu_set(board, "Time Division", 3)  # 1/16 to 1/32
+    tap(board, "back")
+    board.midi_out.clear()
+    for key in ("k7", "k11", "k14"):
+        board.press(key)
+    fast = timed_notes(board, 500)
+    for key in ("k7", "k11", "k14"):
+        board.release(key)
+    board.run(200)
+    assert [n for _t, n in fast][:6] == [79, 76, 72, 67, 64, 60], f"Down over two octaves: {fast}"
+    gaps = [b[0] - a[0] for a, b in itertools.pairwise(fast)]
+    assert all(near(g, 62.5, 3) for g in gaps), f"1/32 at 120 BPM: {gaps}"
+    return "Arp Length and Retrigger as stock, and mode, octaves and time division from the page"
+
+
 # ---- MK2000: sync and routing ----
 
 
@@ -1246,7 +1467,7 @@ def check_mk_rec_quantize() -> str:
     late = after_first(board, 60)
     assert len(late) == 2 and all(near(t, live, 6) for t in late), f"played back as played, {live}: {late}"
     shift_key(board, "k28")
-    assert shows(board, "Quantized"), all_text(board)  # the reader loses the large T and r
+    assert shows(board, "Track Quantized"), all_text(board)
     grid = after_first(board, 60)
     assert len(grid) == 2 and all(near(t, 125, 3) for t in grid), f"Quant puts it on the step: {grid}"
     shift_key(board, "k31")
@@ -1354,6 +1575,9 @@ CHECKS = {
     "mk2000 step fields": check_mk_step_fields,
     "mk2000 track menu": check_mk_track_menu,
     "mk2000 global menu": check_mk_global_menu,
+    "mk2000 scale": check_mk_scale,
+    "mk2000 chord": check_mk_chord,
+    "mk2000 arp settings": check_mk_arp_settings,
     "mk2000 count-in": check_mk_count_in,
     "mk2000 rec quantize": check_mk_rec_quantize,
     "mk2000 sync midi": check_mk_sync_midi,

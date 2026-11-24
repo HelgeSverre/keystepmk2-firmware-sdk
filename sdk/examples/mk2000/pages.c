@@ -1,5 +1,5 @@
 /* KeyStep MK2000: the pages that stay on the display until Back: the step page, track settings,
- * global settings and pattern chaining (docs/MK2000.md). ui.c hands them the encoder, Back,
+ * global settings, pattern chaining, and the arp, chord and scale settings (docs/MK2000.md). ui.c hands them the encoder, Back,
  * Hold and the keys; Play, Stop and the held layers keep their meaning.
  *
  * The step page has two levels: the list of steps, then the fields of one step. The menus show
@@ -17,6 +17,9 @@ enum { F_VELOCITY, F_GATE, F_PROBABILITY, F_RATCHET, F_CONDITION, F_TIE, F_OFFSE
 enum { T_CHANNEL, T_LENGTH, T_DIVISION, T_SWING, T_GATE, T_DIRECTION, T_FOLLOWS, T_SHIFT, T_QUANTIZE, TRACK_ENTRIES };
 enum { G_BRIGHTNESS, G_PATTERN_CHANGE, G_TEMPO, G_OVERDUB, G_REC_QUANTIZE, G_KEYS, G_HOME_CHANNEL, G_SYNC, G_DIN_THRU,
        G_USB_THRU, G_ABOUT, GLOBAL_ENTRIES };
+enum { A_LENGTH, A_RETRIGGER, A_MODE, A_OCTAVES, A_DIVISION, A_GATE, A_SWING, ARP_ENTRIES };
+enum { C_PRESET, C_STRUM, C_STRUM_TYPE, C_VOICING, CHORD_ENTRIES };
+enum { S_GLOBAL, S_GLOBAL_ROOT, S_PATTERN, S_PATTERN_ROOT, SCALE_ENTRIES };
 
 typedef struct {
     const char *name;
@@ -42,6 +45,12 @@ static const char *const tempo_changes[] = { "When stopped", "Always", "Never" }
 static const char *const key_states[] = { "Home", "Track" };
 static const char *const sync_sources[MK_SYNC_COUNT] = { "Auto", "Internal", "USB", "MIDI Din", "Sync In" };
 static const char *const version[] = { ks_version };
+static const char *const voicings[] = { "Off", "Bass -1", "Bass -2", "Bass -3" };
+/* The pattern's scale in the order the stock menu has it: Off, Global, then the scales. */
+static const char *const pattern_scales[MK_SCALE_COUNT + 1] = {
+    "Off", "Global", "Major", "Minor", "Dorian", "Phrygian", "Lydian", "Mixolydian", "Locrian", "Harmonic Minor",
+    "Blues", "Pentatonic Major", "Pentatonic Minor", "Japanese", "Gypsy", "Arabic", "Freygish",
+};
 
 /* Gate, probability and offset move in fives: a hundred detents would be too many to turn. The
  * offset is shown in per cent of a step, -50 to +50. */
@@ -79,6 +88,31 @@ static const entry global_entries[GLOBAL_ENTRIES] = {
     { "MIDI Thru", 0, 1, 1, off_on, 0, 0 },
     { "USB to MIDI", 0, 1, 1, off_on, 0, 0 },
     { "About", 0, 0, 0, version, 0, 0 },
+};
+
+/* Arp Length and Arp Retrigger are the stock menu's two entries; the rest has no menu there. */
+static const entry arp_entries[ARP_ENTRIES] = {
+    { "Arp Length", 1, 64, 1, 0, " steps", 0 },
+    { "Arp Retrigger", 0, 1, 1, off_on, 0, 0 },
+    { "Mode", 0, MK_ARP_MODES - 1, 1, mk_arp_mode_name, 0, 0 },
+    { "Octaves", 1, 4, 1, 0, 0, 0 },
+    { "Time Division", 0, MK_DIV_COUNT - 1, 1, mk_div_name, 0, 0 },
+    { "Gate", 10, 90, 5, 0, " %", 0 },
+    { "Swing", 50, 75, 1, 0, " %", 0 },
+};
+
+static const entry chord_entries[CHORD_ENTRIES] = {
+    { "Preset", 0, MK_CHORD_COUNT - 1, 1, mk_chord_name, 0, 0 },
+    { "Strum (ms)", 0, MK_STRUM_MAX, 2, 0, " ms", 0 },
+    { "Strum Type", 0, MK_STRUM_COUNT - 1, 1, mk_strum_name, 0, 0 },
+    { "Voicing", 0, 3, 1, voicings, 0, 0 },
+};
+
+static const entry scale_entries[SCALE_ENTRIES] = {
+    { "Global Scale", 0, MK_SCALE_COUNT - 1, 1, mk_scale_name, 0, 0 },
+    { "Global Root", 0, 11, 1, mk_root_name, 0, 0 },
+    { "Pattern Scale", 0, MK_SCALE_COUNT, 1, pattern_scales, 0, 0 },
+    { "Pattern Root", 0, 11, 1, mk_root_name, 0, 0 },
 };
 
 static uint8_t kind;            /* PAGE_ */
@@ -246,6 +280,84 @@ static void global_set(int which, int value) {
     app.settings_dirty = 1;
 }
 
+/* ---- arp, chord and scale settings ---- */
+
+static int arp_get(int which) {
+    const mk_arp_settings *a = &app.settings.arp;
+    switch (which) {
+    case A_LENGTH: return a->length < 1 ? 16 : a->length > 64 ? 64 : a->length;
+    case A_RETRIGGER: return !a->free_run;
+    case A_MODE: return a->mode < MK_ARP_MODES ? a->mode : MK_ARP_UP;
+    case A_OCTAVES: return a->octaves;
+    case A_DIVISION: return a->division < MK_DIV_COUNT ? a->division : MK_DIV_16;
+    case A_GATE: return a->gate;
+    default: return a->swing;
+    }
+}
+
+/* The arp reads its settings afresh on every step. */
+static void arp_set(int which, int value) {
+    mk_arp_settings *a = &app.settings.arp;
+    switch (which) {
+    case A_LENGTH: a->length = (uint8_t)value; break;
+    case A_RETRIGGER: a->free_run = (uint8_t)!value; break;
+    case A_MODE: a->mode = (uint8_t)value; break;
+    case A_OCTAVES: a->octaves = (uint8_t)value; break;
+    case A_DIVISION: a->division = (uint8_t)value; break;
+    case A_GATE: a->gate = (uint8_t)value; break;
+    default: a->swing = (uint8_t)value; break;
+    }
+    app.settings_dirty = 1;
+}
+
+static int chord_get(int which) {
+    const mk_chord_settings *c = &app.settings.chord;
+    switch (which) {
+    case C_PRESET: return c->preset < MK_CHORD_COUNT ? c->preset : MK_CHORD_USER;
+    case C_STRUM: return c->strum > MK_STRUM_MAX ? MK_STRUM_MAX : c->strum;
+    case C_STRUM_TYPE: return c->strum_type < MK_STRUM_COUNT ? c->strum_type : MK_STRUM_UP;
+    default: return c->voicing > 3 ? 0 : c->voicing;
+    }
+}
+
+static void chord_set(int which, int value) {
+    mk_chord_settings *c = &app.settings.chord;
+    switch (which) {
+    case C_PRESET: c->preset = (uint8_t)value; break;
+    case C_STRUM: c->strum = (uint8_t)value; break;
+    case C_STRUM_TYPE: c->strum_type = (uint8_t)value; break;
+    default: c->voicing = (uint8_t)value; break;
+    }
+    app.settings_dirty = 1;
+}
+
+/* The pattern's scale is stored as 0 = Global, a scale, or MK_PATTERN_SCALE_OFF; the menu has Off
+ * first, then Global. */
+static int scale_get(int which) {
+    const mk_pattern *p = mk_engine_pattern();
+    switch (which) {
+    case S_GLOBAL: return app.settings.scale < MK_SCALE_COUNT ? app.settings.scale : MK_SCALE_OFF;
+    case S_GLOBAL_ROOT: return app.settings.root % 12;
+    case S_PATTERN: return p->scale == MK_PATTERN_SCALE_GLOBAL ? 1 : p->scale < MK_SCALE_COUNT ? p->scale + 1 : 0;
+    default: return p->root % 12;
+    }
+}
+
+static void scale_set(int which, int value) {
+    mk_pattern *p = mk_engine_pattern();
+    switch (which) {
+    case S_GLOBAL: app.settings.scale = (uint8_t)value; break;
+    case S_GLOBAL_ROOT: app.settings.root = (uint8_t)value; break;
+    case S_PATTERN: p->scale = (uint8_t)(value == 0 ? MK_PATTERN_SCALE_OFF : value == 1 ? MK_PATTERN_SCALE_GLOBAL : value - 1); break;
+    default: p->root = (uint8_t)value; break;
+    }
+    if (which == S_GLOBAL || which == S_GLOBAL_ROOT) app.settings_dirty = 1;
+    else app.dirty = 1;
+}
+
+static const menu arp_menu = { arp_entries, ARP_ENTRIES, arp_get, arp_set };
+static const menu chord_menu = { chord_entries, CHORD_ENTRIES, chord_get, chord_set };
+static const menu scale_menu = { scale_entries, SCALE_ENTRIES, scale_get, scale_set };
 static const menu step_menu = { step_fields, FIELDS, step_get, step_set };
 static const menu track_menu = { track_entries, TRACK_ENTRIES, track_get, track_set };
 static const menu global_menu = { global_entries, GLOBAL_ENTRIES, global_get, global_set };
@@ -255,6 +367,9 @@ static const menu *current_menu(void) {
     case PAGE_STEPS: return level == INSIDE ? &step_menu : 0;
     case PAGE_TRACK: return &track_menu;
     case PAGE_GLOBAL: return &global_menu;
+    case PAGE_ARP: return &arp_menu;
+    case PAGE_CHORD: return &chord_menu;
+    case PAGE_SCALE: return &scale_menu;
     default: return 0;
     }
 }
@@ -301,7 +416,7 @@ void pages_open(int which, uint32_t buttons) {
         cursor = shown = editing = 0;
         snapped = NO_TRACK;
     }
-    holding = buttons & (KS_BTN_SEQ | KS_BTN_SHIFT);
+    holding = buttons & (KS_BTN_SEQ | KS_BTN_SHIFT | KS_BTN_ARP | KS_BTN_CHORD);
     app.redraw = 1;
 }
 
@@ -533,6 +648,15 @@ int pages_draw(void) {
         return 1;
     case PAGE_CHAIN:
         chain_screen();
+        return 1;
+    case PAGE_ARP:
+        menu_screen("Arp Settings", &arp_menu);
+        return 1;
+    case PAGE_CHORD:
+        menu_screen("Chord", &chord_menu);
+        return 1;
+    case PAGE_SCALE:
+        menu_screen("Scale", &scale_menu);
         return 1;
     default:
         return 0;

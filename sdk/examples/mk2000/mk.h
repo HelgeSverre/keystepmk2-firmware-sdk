@@ -4,6 +4,7 @@
  *   store.c     patterns, chains and settings in the SDK's flash area
  *   ui.c        buttons, layers and gestures
  *   arp.c       the arpeggiator on the keys; no hardware access
+ *   harmony.c   scales and chords: tables and arithmetic; no hardware access
  *   pages.c     the menu pages: steps, track and global settings, chain
  *   screens.c   the display
  *   clock.c     following an external clock; no hardware access
@@ -83,7 +84,9 @@ typedef struct {
 
 typedef struct {
     uint16_t tempo;                     /* tenths of a BPM, 300 to 2400 */
-    uint8_t scale, root;                /* kept for later; 0 = off */
+    uint8_t scale;                      /* 0 = the global scale, MK_SCALE_MAJOR and up = this scale,
+                                           MK_PATTERN_SCALE_OFF = none */
+    uint8_t root;                       /* of the pattern's own scale: 0 (C) to 11 (B) */
     mk_track track[MK_TRACKS];
 } mk_pattern;
 
@@ -150,7 +153,9 @@ typedef struct {
     uint8_t division;                   /* MK_DIV_ */
     uint8_t gate;                       /* 10 to 90 per cent */
     uint8_t swing;                      /* 50 to 75 */
-    uint8_t reserved[3];
+    uint8_t length;                     /* the pattern starts again after this many steps, 1 to 64; 0 reads as 16 */
+    uint8_t free_run;                   /* 1 = Arp Retrigger Off: the length is not used */
+    uint8_t reserved;
 } mk_arp_settings;
 
 typedef struct {
@@ -165,6 +170,52 @@ int mk_arp_held(void);                                  /* how many notes the ar
 void mk_arp_tick(void);                                 /* one of 96 per quarter note, always running */
 void mk_arp_sync(void);                                 /* the sequencer started: restart the step grid from this tick */
 void mk_arp_clear(void);                                /* forget every key and end the sounding notes */
+
+/* ---- scales and chords ---- */
+
+enum {
+    MK_SCALE_OFF, MK_SCALE_MAJOR, MK_SCALE_MINOR, MK_SCALE_DORIAN, MK_SCALE_PHRYGIAN, MK_SCALE_LYDIAN,
+    MK_SCALE_MIXOLYDIAN, MK_SCALE_LOCRIAN, MK_SCALE_HARMONIC_MINOR, MK_SCALE_BLUES, MK_SCALE_PENTATONIC_MAJOR,
+    MK_SCALE_PENTATONIC_MINOR, MK_SCALE_JAPANESE, MK_SCALE_GYPSY, MK_SCALE_ARABIC, MK_SCALE_FREYGISH,
+    MK_SCALE_COUNT,
+};
+#define MK_PATTERN_SCALE_GLOBAL 0
+#define MK_PATTERN_SCALE_OFF MK_SCALE_COUNT
+extern const char *const mk_scale_name[MK_SCALE_COUNT];        /* the stock names: "Off", "Major", ... "Freygish" */
+extern const char *const mk_scale_short[MK_SCALE_COUNT];       /* three letters: "", "Maj", "Min", ... */
+extern const char *const mk_root_name[12];                     /* "C", "C#", ... "B" */
+
+/* The note of the scale nearest to `note` (0 to 127), the lower one when two are as near, as the
+ * stock firmware does. MK_SCALE_OFF, or anything that is not a scale, leaves the note alone. */
+int mk_scale_fit(int note, int scale, int root);
+
+enum {
+    MK_CHORD_USER, MK_CHORD_OCT, MK_CHORD_5TH, MK_CHORD_MAJ, MK_CHORD_MIN, MK_CHORD_SUS2, MK_CHORD_SUS4,
+    MK_CHORD_MAJ7, MK_CHORD_MIN7, MK_CHORD_MAJ9, MK_CHORD_MIN9, MK_CHORD_MAJ11, MK_CHORD_MIN11, MK_CHORD_COUNT,
+};
+extern const char *const mk_chord_name[MK_CHORD_COUNT];        /* the stock names: "User", "Oct", "5th", "Maj", ... */
+enum { MK_STRUM_UP, MK_STRUM_ALT_UP, MK_STRUM_DOWN, MK_STRUM_ALT_DOWN, MK_STRUM_RANDOM, MK_STRUM_COUNT };
+extern const char *const mk_strum_name[MK_STRUM_COUNT];
+#define MK_CHORD_NOTES 8        /* the most a key plays */
+#define MK_STRUM_MAX 80         /* milliseconds between two notes of a chord */
+
+typedef struct {
+    uint8_t on;                         /* chord mode: a key plays the chord built on it */
+    uint8_t preset;                     /* MK_CHORD_ */
+    uint8_t strum;                      /* milliseconds from one note to the next, 0 to MK_STRUM_MAX */
+    uint8_t strum_type;                 /* MK_STRUM_ */
+    uint8_t voicing;                    /* 0 = off, 1 to 3 = the root that many octaves down as well */
+    uint8_t user[3];                    /* the user chord: bit n set = n semitones above its lowest note
+                                           (bit 0 is the lowest note itself and reads as set) */
+} mk_chord_settings;
+
+/* The notes a key plays in chord mode, low to high, each fitted to the scale, none twice, none
+ * outside 0 to 127. Returns how many, 1 to MK_CHORD_NOTES. */
+int mk_chord_notes(const mk_chord_settings *chord, int note, int scale, int root, uint8_t out[MK_CHORD_NOTES]);
+/* Put `n` notes that are low to high into the order they are strummed in. */
+void mk_chord_order(uint8_t *notes, int n, int strum_type, uint32_t (*random)(void));
+/* Make these notes (any order, up to MK_CHORD_NOTES, within two octaves of the lowest) the user chord. */
+void mk_chord_learn(mk_chord_settings *chord, const uint8_t *notes, int n);
 
 /* ---- following an external clock: the ticks between two of its pulses, spread out ----
  *
@@ -207,7 +258,9 @@ typedef struct {
     uint8_t usb_thru;                   /* 1 = what comes in on USB goes out on DIN */
     uint8_t rec_unquantized;            /* 1 = Rec Quantize Off: live notes keep their timing. 0 (On) is
                                            what settings saved before it existed hold */
-    uint8_t reserved[10];
+    uint8_t scale;                      /* the global scale, MK_SCALE_ */
+    uint8_t root;                       /* and its root, 0 (C) to 11 (B) */
+    mk_chord_settings chord;
 } mk_settings;
 #define MK_SETTINGS_VERSION 1
 
