@@ -6,6 +6,7 @@
  *   arp.c       the arpeggiator on the keys; no hardware access
  *   harmony.c   scales and chords: tables and arithmetic; no hardware access
  *   mutate.c    Mutate: a variation of a track; no hardware access
+ *   cv.c        the CV outputs and their settings
  *   controls.c  the strips, aftertouch and the pedal: what they send, and recording them
  *   pages.c     the menu pages: steps, track and global settings, chain
  *   screens.c   the display
@@ -256,6 +257,21 @@ uint32_t mk_clock_interval(void);               /* microseconds between pulses, 
 
 /* ---- store ---- */
 
+/* The CV outputs, with the stock firmware's settings and numbering. */
+enum { MK_MOD_VELOCITY, MK_MOD_AFTERTOUCH, MK_MOD_WHEEL, MK_MOD_RANDOM, MK_MOD_PULSE, MK_MOD_SOURCES };
+enum { MK_RETRIG_MONO, MK_RETRIG_LEGATO, MK_RETRIG_SLIDE, MK_RETRIGS };
+
+typedef struct {
+    uint8_t pitch_format;               /* 0 = volts per octave, 1 = hertz per volt */
+    uint8_t pitch_ref;                  /* the note at 0 V, in octaves from C-2: 0 to 5 (3 = C1, note 36) */
+    uint8_t gate_retrig;                /* MK_RETRIG_ */
+    uint8_t gate_format;                /* 0 = S-trig, 1 = V-trig 5 V, 2 = V-trig 12 V */
+    uint8_t mod_source[2];              /* MK_MOD_ */
+    uint8_t mod_volts[2];               /* 1 to 10: the top of the output */
+    uint8_t bend_range;                 /* semitones the Bend strip moves the pitch output, 1 to 24 */
+    uint8_t reserved[7];
+} mk_cv_settings;
+
 typedef struct {
     uint8_t version;                    /* MK_SETTINGS_VERSION */
     uint8_t home_channel;               /* 0 to 15 */
@@ -274,8 +290,9 @@ typedef struct {
     uint8_t scale;                      /* the global scale, MK_SCALE_ */
     uint8_t root;                       /* and its root, 0 (C) to 11 (B) */
     mk_chord_settings chord;
+    mk_cv_settings cv;
 } mk_settings;
-#define MK_SETTINGS_VERSION 1
+#define MK_SETTINGS_VERSION 2           /* 1 was 32 bytes, without cv */
 enum {
     MK_OPT_REC_UNQUANTIZED = 1,         /* Rec Quantize Off: live notes keep their timing */
     MK_OPT_NO_AUTOM = 2,                /* Rec Autom Off: the strips, pressure and pedal are not recorded */

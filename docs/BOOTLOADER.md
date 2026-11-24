@@ -113,3 +113,53 @@ the emulator, against `FakeBootloader`: a model built from what MIDI Control Cen
 from the real bootloader. `just flash-selftest` runs the update in both directions and every
 refusal. `just probe` reads a connected unit's descriptors and sends nothing else; it is the
 tool for the first look at update mode.
+
+## Seen on a device, 2026-11-24
+
+`just probe` (descriptor reads only) on one unit, serial `4651400812010772`, before and after
+holding Tempo while switching on.
+
+| | Application | Update mode (Tempo held) |
+|---|---|---|
+| VID:PID | `1C75:0228` | `1C75:0228` |
+| Product string | `KeyStep mk2` | `KeyStep mk2 Updater` |
+| Interfaces | 3: `FE/01/02`, `01/01/00`, `01/03/00` | 1: `FE/01/02` |
+| Functional descriptor | `09 21 0B FF 00 40 00 10 01` | `09 21 0B FF 00 40 00 1A 01` |
+| Serial string | `4651400812010772` | nine characters of noise |
+
+- Holding Tempo while switching on enters update mode with the application untouched: the
+  recovery entry works (the first gating question in ROADMAP.md).
+- Update mode declares download, upload and will-detach, 64-byte transfers, and DFU version
+  `0x011A` where the application's stub says `0x0110`.
+- The serial string is noise after a Tempo entry. That fits the reading above: the application
+  hands its serial string to the bootloader in RAM when it is asked for update mode, and nothing
+  does after a cold start. MIDI Control Center matches the update-mode device by serial, so it
+  may not recognise a unit entered this way; not tried.
+
+### Upload: the bootloader reads flash back
+
+Requests sent in update mode on the same unit: `DFU_GETSTATE`, `DFU_GETSTATUS`, `DFU_UPLOAD` and
+`DFU_ABORT`. Nothing else.
+
+| Request | Reply |
+|---|---|
+| Get state, get status | `02`, `00 00 00 00 02 00`: dfuIDLE, no error |
+| Upload, block 0 | 3 bytes: `00 21 41` |
+| Upload, block 1 | Stalled. The state becomes `0x0F`, which is not a DFU state; uploads are then refused and `DFU_ABORT` does not clear it. Switching off and on with Tempo held does |
+| Upload, block 2 and up, from idle | 64 bytes of flash per block, from `0x08008000` |
+| Abort, after uploads | Back to dfuIDLE (from dfuUPLOAD-IDLE, `09`) |
+
+- `00 21 41` is the command list an ST DfuSe bootloader returns for block 0: get commands, set
+  address pointer (`0x21`), erase (`0x41`). Block 1 is invalid there too, and reads start at block
+  2 from the address pointer, as here. So the bootloader is DfuSe-shaped, with `0x08008000` as the
+  pointer after start-up. Set address pointer and erase were not sent.
+- 7680 blocks from block 2 (`0x08008000` to the end of flash at `0x08080000`) were read. The first
+  429,384 bytes are stock 1.0.2 without its 64-byte header, byte for byte: the load address is
+  `0x08008000`, the header is not stored there, and this unit runs 1.0.2.
+- After the image: `FF` to the end of its 2 KiB page (`0x08071000`); `00` from `0x08071000` to
+  `0x0807F800` (whether that is what the flash holds or what the bootloader returns for it is not
+  known); `FF` in the last page up to `0x0807FFF8`; and there `DE C0 0D 60 0A 00 00 00`:
+  `0x600DC0DE` and the number 10. Read as a mark the bootloader leaves for an image it accepted
+  (I); what the 10 counts is not known.
+- The image's header was not found anywhere in the range read.
+

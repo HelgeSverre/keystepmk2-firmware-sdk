@@ -1190,6 +1190,146 @@ def check_mk_mutate() -> str:
     return "new variations of the original on every press, reset, while playing, kept by a save"
 
 
+def check_mk_cv() -> str:
+    """The numbers are the ones stock 1.0.2 put on the same outputs with the same settings."""
+    board = mk2000()
+
+    def pitches() -> list[int]:
+        found = []
+        for key in ("k0", "k7", "k19", "k31"):  # notes 53, 60, 72, 84
+            board.press(key)
+            board.run(40)
+            found.append(board.outputs()["pitch"])
+            board.release(key)
+            board.run(40)
+        return found
+
+    def alike(got: list[int], want: list[int], tolerance: int) -> bool:
+        return all(near(g, w, tolerance) for g, w in zip(got, want, strict=True))
+
+    def second_key() -> list[tuple[int, int]]:
+        """(gate, pitch) each millisecond after a second key goes down with the first held."""
+        board.press("k7")
+        board.run(80)
+        board.press("k9")
+        trace = []
+        for _ in range(70):
+            board.run(1)
+            out = board.outputs()
+            trace.append((out["gate_pin"], out["pitch"]))
+        board.release("k7")
+        board.release("k9")
+        board.run(60)
+        return trace
+
+    def cv_page() -> None:
+        tap(board, "encoder")
+        menu_to(board, "CV Settings")
+        tap(board, "encoder")
+
+    def leave() -> None:
+        tap(board, "back")
+        assert shows(board, "Global Settings") and shows(board, "CV Settings"), (
+            f"Back goes up a level: {all_text(board)}"
+        )
+        tap(board, "back")
+
+    assert alike(pitches(), [9284, 13106, 19660, 26214], 2), "volts per octave from C1, as shipped"
+    cv_page()
+    assert shows(board, "Pitch Format"), all_text(board)
+    menu_set(board, "Pitch Ref", -3)
+    leave()
+    assert alike(pitches(), [28944, 32768, 39320, 45874], 2), "Pitch Ref C-2"
+    cv_page()
+    menu_set(board, "Pitch Ref", 5)
+    leave()
+    assert alike(pitches(), [0, 0, 6552, 13106], 2), "Pitch Ref C3: notes below it sit at the bottom"
+    cv_page()
+    menu_set(board, "Pitch Format", 1)
+    leave()
+    assert alike(pitches(), [4372, 6552, 13106, 26214], 12), f"hertz per volt from C3: {pitches()}"
+    cv_page()
+    menu_set(board, "Pitch Ref", -2)
+    leave()
+    assert alike(pitches(), [17494, 26214, 52428, 65535], 24), f"hertz per volt from C1: {pitches()}"
+    cv_page()
+    menu_set(board, "Pitch Format", -1)
+    leave()
+    board.press("k7")
+    board.set_touch(1, 1.0)
+    board.run(80)
+    assert near(board.outputs()["pitch"], 14198, 3), "the Bend strip at the top: two semitones as shipped"
+    board.set_touch(1, 0.0)
+    board.run(80)
+    assert near(board.outputs()["pitch"], 12014, 3), "and two down at the bottom"
+    board.set_touch(1, None)
+    board.run(250)
+    assert near(board.outputs()["pitch"], 13106, 2), "back in the centre"
+    cv_page()
+    menu_set(board, "Pitch Bend Range", 10)
+    leave()
+    board.set_touch(1, 1.0)
+    board.run(80)
+    assert near(board.outputs()["pitch"], 19658, 6), f"Pitch Bend Range 12: {board.outputs()['pitch']}"
+    board.set_touch(1, None)
+    board.release("k7")
+    board.run(250)
+
+    legato = second_key()
+    assert {g for g, _p in legato} == {1} and all(near(p, 14198, 2) for _g, p in legato[12:]), (
+        "Legato: the gate stays up"
+    )
+    cv_page()
+    menu_set(board, "Gate Retrig", -1)
+    leave()
+    mono = [g for g, _p in second_key()]
+    assert 1 <= mono.count(0) <= 4 and mono[-1] == 1, f"Mono: the gate drops for about 2 ms: {mono[:20]}"
+    cv_page()
+    menu_set(board, "Gate Retrig", 2)
+    leave()
+    slide = second_key()
+    steps = sorted({p for _g, p in slide})
+    assert {g for g, _p in slide} == {1} and len(steps) > 10 and near(steps[0], 13106, 2), (
+        "Legato Slide: the pitch glides"
+    )
+    assert near(slide[-1][1], 14198, 2) and near(slide[18][1], 13840, 150), f"about as fast as stock: {slide[18]}"
+
+    cv_page()
+    menu_set(board, "Mod 1 Source", 4)
+    assert shows(board, "Pulse"), all_text(board)
+    menu_set(board, "Mod 2 Max Volt", 5)
+    menu_set(board, "Gate Format", 1)
+    leave()
+    assert board.outputs()["gate_format"] == 2, "V-trig 12V"
+    board.press("k7")
+    board.run(12)
+    high = board.outputs()["mod1"]
+    board.run(30)
+    assert (high, board.outputs()["mod1"]) == (1545, 0), "Pulse: full for a moment at each note"
+    board.release("k7")
+    board.set_touch(0, 0.5)
+    board.run(60)
+    assert near(board.outputs()["mod2"], 1545, 20), (
+        f"Mod 2 at 10 V: half way is what the top was at 5 V: {board.outputs()}"
+    )
+    board.set_touch(0, None)
+    cv_page()
+    menu_set(board, "Mod 1 Source", -1)
+    leave()
+    seen = set()
+    for _ in range(6):
+        board.press("k7")
+        board.run(30 + len(seen))
+        seen.add(board.outputs()["mod1"])
+        board.release("k7")
+        board.run(30)
+    assert len(seen) >= 4 and max(seen) <= 1545, f"Random: another level at every note: {seen}"
+    board.run(2500)  # the settings are written
+    again = mk2000(flash=bytes(board.flash.mem))
+    assert again.outputs()["gate_format"] == 2, "the CV settings come back after a restart"
+    return "pitch format and reference, bend range, gate retrig and format, mod sources and range, kept over a restart"
+
+
 def check_mk_scale() -> str:
     board = mk2000()
     shift_key(board, "chord")
@@ -1747,6 +1887,7 @@ CHECKS = {
     "mk2000 global menu": check_mk_global_menu,
     "mk2000 controls": check_mk_controls,
     "mk2000 mutate": check_mk_mutate,
+    "mk2000 cv": check_mk_cv,
     "mk2000 scale": check_mk_scale,
     "mk2000 chord": check_mk_chord,
     "mk2000 arp settings": check_mk_arp_settings,

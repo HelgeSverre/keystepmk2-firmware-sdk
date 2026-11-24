@@ -1,4 +1,5 @@
-/* KeyStep MK2000: the strips, aftertouch and the pedal. They play on the channel the keys go to,
+/* KeyStep MK2000: the strips, aftertouch and the pedal. The bend, the Mod strip and pressure also
+ * go to the CV outputs (cv.c). They play on the channel the keys go to,
  * and while recording live they are written into the steps of the selected track (Rec Autom).
  *
  * The Bend strip is the stock one: where the finger is, 14 bits, and back to the centre over a
@@ -12,7 +13,6 @@
 
 #define CENTRE 8192
 #define SPRING_STEP 410         /* per 5 ms: the stock firmware comes back in twenty messages */
-#define MOD_CV_TOP 1545         /* what the stock firmware puts on Mod 2 with the strip at the top */
 
 static int bend = CENTRE;       /* the last values sent */
 static int mod = -1, pressure, pedal;
@@ -37,6 +37,7 @@ static void send_bend(uint8_t channel, int value) {
     uint8_t message[3] = { (uint8_t)(0xE0 | channel), (uint8_t)(value & 0x7F), (uint8_t)(value >> 7) };
     bend = value;
     app_send(message, 3);
+    cv_bend(value);
     record(MK_CTL_BEND, value >> 7);
 }
 
@@ -62,7 +63,7 @@ static void mod_poll(uint8_t channel) {
     mod = at >> 1;
     uint8_t message[3] = { (uint8_t)(0xB0 | channel), 1, (uint8_t)mod };
     app_send(message, 3);
-    ks_cv_mod(1, (uint16_t)(mod * MOD_CV_TOP / 127));
+    cv_source(MK_MOD_WHEEL, mod);
     record(MK_CTL_MOD, mod);
 }
 
@@ -84,6 +85,7 @@ static void pressure_poll(uint8_t channel) {
     pressure = want;
     uint8_t message[2] = { (uint8_t)(0xD0 | channel), (uint8_t)want };
     app_send(message, 2);
+    cv_source(MK_MOD_AFTERTOUCH, want);
     record(MK_CTL_PRESSURE, want);
 }
 

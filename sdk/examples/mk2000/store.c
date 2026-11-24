@@ -30,7 +30,7 @@
  * unless one of its steps has an offset.
  *
  * System payload (kind 2, id 0): a byte of what is present (bit 0 the settings, bits 1-4 the chains
- * of banks 0-3), the 32 bytes of mk_settings, then four mk_chain of 34 bytes. Saving one of them
+ * of banks 0-3), the 48 bytes of mk_settings, then four mk_chain of 34 bytes. Saving one of them
  * rewrites the record: the settings and four chains share one sector instead of taking five. */
 #include "keystep.h"
 #include "mk.h"
@@ -58,7 +58,7 @@
 #define PARTS_MAX 2
 _Static_assert(PATTERN_MAX <= PARTS_MAX * PAYLOAD_MAX, "the worst-case pattern must fit in PARTS_MAX sectors");
 _Static_assert(SECTORS <= 32, "the sector map is a 32-bit word");
-_Static_assert(sizeof(mk_settings) == 32, "the system record holds 32 bytes of settings");
+_Static_assert(sizeof(mk_settings) == 48, "the system record holds 48 bytes of settings");
 
 #define SYSTEM MK_SLOTS                     /* the record number of the system record */
 #define RECORDS (MK_SLOTS + 1)

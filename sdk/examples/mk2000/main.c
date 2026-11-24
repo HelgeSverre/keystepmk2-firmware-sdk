@@ -18,7 +18,7 @@ static uint8_t mutated;                 /* a bit per track that is a variation n
 static volatile uint8_t switched;
 static volatile uint32_t ticks;
 static uint32_t period_rest;
-static uint8_t clocks, gate_holders;
+static uint8_t clocks;
 static uint32_t settings_changed_at;
 static uint8_t chain_running, chain_at;        /* Play started the chain; the entry playing or waiting */
 
@@ -50,23 +50,11 @@ static void send(const uint8_t *bytes, int n) { send_to(TO_DIN | TO_USB, bytes, 
 void app_send(const uint8_t *bytes, int n) { send(bytes, n); }
 
 /* Whatever plays on track 1's channel - the track, the keys, the arp - also plays on the CV
- * outputs: the last note's pitch, the gate while any of them is held, and its velocity on Mod 1,
- * on the scale the stock firmware uses (1545 at the top). */
+ * outputs (cv.c). */
 void app_note(uint8_t channel, uint8_t note, uint8_t velocity) {
     uint8_t message[3] = { (uint8_t)((velocity ? 0x90 : 0x80) | channel), note, velocity };
     send(message, 3);
-    if (channel != mk_engine_pattern()->track[0].channel) return;
-    uint32_t state = app_lock();
-    if (velocity) {
-        int value = (note - 36) * 65536 / 120;
-        ks_cv_pitch((uint16_t)(value < 0 ? 0 : value > 65535 ? 65535 : value));
-        ks_cv_mod(0, (uint16_t)(velocity * 1545 / 127));
-        gate_holders++;
-    } else if (gate_holders) {
-        gate_holders--;
-    }
-    ks_gate(gate_holders != 0);
-    app_unlock(state);
+    if (channel == mk_engine_pattern()->track[0].channel) cv_note(note, velocity);
 }
 
 uint8_t app_keys_channel(void) {
@@ -122,8 +110,7 @@ static void engine_realtime(uint8_t byte) {
     } else if (byte == 0xFC) {
         ks_sync_out(KS_SYNC_RUN, 0);
         ks_sync_out(KS_SYNC_CLOCK, 0);
-        gate_holders = 0;
-        ks_gate(0);
+        cv_stop();
     } else if (byte == 0xF8) {                          /* the sync output: one pulse per sixteenth */
         if (clocks == 0) ks_sync_out(KS_SYNC_CLOCK, 1);
         if (clocks == 3) ks_sync_out(KS_SYNC_CLOCK, 0);
@@ -650,7 +637,9 @@ int main(void) {
     ks_init();
     mk_store_init();
     app.settings = (mk_settings){ .version = MK_SETTINGS_VERSION, .keys_on_track = 1, .seq_on = 1, .brightness = 0x8D,
-                                   .arp = { .mode = MK_ARP_UP, .octaves = 1, .division = MK_DIV_16, .gate = 50, .swing = 50, .length = 16 } };
+                                   .arp = { .mode = MK_ARP_UP, .octaves = 1, .division = MK_DIV_16, .gate = 50, .swing = 50, .length = 16 },
+                                   .cv = { .pitch_ref = 3, .gate_retrig = MK_RETRIG_LEGATO, .gate_format = 1,
+                                           .mod_source = { MK_MOD_VELOCITY, MK_MOD_WHEEL }, .mod_volts = { 5, 5 }, .bend_range = 2 } };
     mk_settings stored;
     if (mk_store_load_settings(&stored) == MK_STORE_OK && stored.version == MK_SETTINGS_VERSION) app.settings = stored;
     app.slot = app.settings.slot < MK_SLOTS ? app.settings.slot : 0;
@@ -662,6 +651,7 @@ int main(void) {
     mk_engine_enable(app.settings.seq_on);
     mk_arp_init(&app.settings.arp, &arp_io);
     mk_clock_init(&clock_io);
+    cv_apply();
     splash();
     ks_timer_start(5208, tick);
     app.redraw = 1;
@@ -670,6 +660,7 @@ int main(void) {
     for (;;) {
         ui_poll();
         controls_poll(ks_millis());
+        cv_poll(ks_millis());
         sync_poll();
         thru_poll(&din_in, KS_MIDI_DIN);
         thru_poll(&usb_in, KS_MIDI_USB);

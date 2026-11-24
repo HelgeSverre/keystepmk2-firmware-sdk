@@ -200,3 +200,28 @@ Stock 1.0.2 in the emulator, Seq mode, eight steps recorded: C4 D4 E4 F4 G4 A4 B
 - `Dice Rolled`, `Clear Spice` and `Gate/Spice only in Seq/Arp mode` are in the firmware's
   strings; touching the Mod strip shows a `Pitch | Mod` display. Spice, Dice and the strip
   functions were not explored.
+
+## CV settings
+
+Stock 1.0.2 in the emulator, blank calibration, each setting written over USB (`36 FB`, see
+SYSEX.md). A setting with a list of values is written as its index scaled to `0x7FFF`: index ×
+32767 / (values − 1); a small number such as 1 is read as the first value. All numbers are
+register values, not volts.
+
+- **Pitch Format VoltOct**: `(note − reference) × 65536 / 120`, never below 0. **Pitch Ref** C-2,
+  C-1, C0, C1, C2, C3 puts the reference at note 0, 12, 24, 36, 48, 60. Notes 53, 60, 72, 84 at C1:
+  9284, 13106, 19660, 26214.
+- **HertzVolt**: 6553 at the reference note, doubling every octave, 65535 at most. The same notes
+  at C1: 17494, 26214, 52428, 65535; at C3: 4372, 6552, 13106, 26214.
+- **Pitch Bend Range**: the Bend strip at the top adds 546 per semitone of range to the pitch
+  output: note 60 at C1 gives 13652 at 1 ST, 14198 at 2 ST (the default), 19658 at 12, 26212 at
+  24.
+- **Gate Retrig**, a second key with the first held: Legato (the default) leaves the gate up;
+  Mono drops it for 2 ms; Legato Slide leaves it up and moves the pitch there gradually (13106,
+  13174, 13266, 13350, 13428, 13498 … a millisecond apart, towards 14198).
+- **Gate Format** was written and read back; what it does to the gate pins was not read cleanly.
+- **Mod 1 Source**: Velocity gives the last note's velocity; ModWheel the Mod strip; Aftertouch
+  stayed at 0 (see Strips, aftertouch and pedal); Random a new level at each note (758, 1233,
+  599, 612); Pulse 1545 at 10 ms after the key and 0 at 20 ms.
+- **Mod Max Volt**: the top of the output is 309 per volt: 309 at 1 V, 1545 at 5 V, and the strip
+  half way at 10 V gives 1545.

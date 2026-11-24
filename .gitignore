@@ -9,3 +9,5 @@ sdk/build/
 # Arturia binaries: fetch with `just fetch`, hashes are in firmware/listing.json
 firmware/*.ks2fw
 firmware/*/*.bin
+# Read from a unit: Arturia code and per-unit data
+firmware/device/

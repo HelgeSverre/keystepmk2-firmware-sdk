@@ -17,7 +17,8 @@ enum { F_VELOCITY, F_GATE, F_PROBABILITY, F_RATCHET, F_CONDITION, F_TIE, F_OFFSE
 enum { T_CHANNEL, T_LENGTH, T_DIVISION, T_SWING, T_GATE, T_DIRECTION, T_FOLLOWS, T_SHIFT, T_QUANTIZE, T_CLEAR_AUTOM,
        TRACK_ENTRIES };
 enum { G_BRIGHTNESS, G_PATTERN_CHANGE, G_TEMPO, G_OVERDUB, G_REC_QUANTIZE, G_REC_AUTOM, G_KEYS, G_HOME_CHANNEL,
-       G_AFTERTOUCH, G_SYNC, G_DIN_THRU, G_USB_THRU, G_ABOUT, GLOBAL_ENTRIES };
+       G_AFTERTOUCH, G_SYNC, G_DIN_THRU, G_USB_THRU, G_CV, G_ABOUT, GLOBAL_ENTRIES };
+enum { V_FORMAT, V_REF, V_BEND, V_GATE, V_RETRIG, V_SOURCE_1, V_VOLTS_1, V_SOURCE_2, V_VOLTS_2, CV_ENTRIES };
 enum { A_LENGTH, A_RETRIGGER, A_MODE, A_OCTAVES, A_DIVISION, A_GATE, A_SWING, ARP_ENTRIES };
 enum { C_PRESET, C_STRUM, C_STRUM_TYPE, C_VOICING, CHORD_ENTRIES };
 enum { S_GLOBAL, S_GLOBAL_ROOT, S_PATTERN, S_PATTERN_ROOT, SCALE_ENTRIES };
@@ -48,6 +49,12 @@ static const char *const sync_sources[MK_SYNC_COUNT] = { "Auto", "Internal", "US
 static const char *const version[] = { ks_version };
 static const char *const sensitivities[] = { "Off", "Low", "Medium", "High" };
 static const char *const automations[MK_CONTROLLERS + 1] = { "Bend", "Mod", "Aftertouch", "Pedal", "All" };
+static const char *const open_page[] = { "click: open" };
+static const char *const pitch_formats[] = { "VoltOct", "HertzVolt" };
+static const char *const pitch_refs[] = { "C-2", "C-1", "C0", "C1", "C2", "C3" };
+static const char *const gate_formats[] = { "S-trig", "V-trig 5V", "V-trig 12V" };
+static const char *const retrigs[MK_RETRIGS] = { "Mono", "Legato", "Legato Slide" };
+static const char *const mod_sources[MK_MOD_SOURCES] = { "Velocity", "Aftertouch", "ModWheel", "Random", "Pulse" };
 static const char *const voicings[] = { "Off", "Bass -1", "Bass -2", "Bass -3" };
 /* The pattern's scale in the order the stock menu has it: Off, Global, then the scales. */
 static const char *const pattern_scales[MK_SCALE_COUNT + 1] = {
@@ -93,7 +100,21 @@ static const entry global_entries[GLOBAL_ENTRIES] = {
     { "Clock Receive", 0, MK_SYNC_COUNT - 1, 1, sync_sources, 0, 0 },
     { "MIDI Thru", 0, 1, 1, off_on, 0, 0 },
     { "USB to MIDI", 0, 1, 1, off_on, 0, 0 },
+    { "CV Settings", 0, 0, 0, open_page, 0, 0 },         /* a page of its own; Back comes back here */
     { "About", 0, 0, 0, version, 0, 0 },
+};
+
+/* The stock firmware's CV settings, with its names and values. */
+static const entry cv_entries[CV_ENTRIES] = {
+    { "Pitch Format", 0, 1, 1, pitch_formats, 0, 0 },
+    { "Pitch Ref", 0, 5, 1, pitch_refs, 0, 0 },
+    { "Pitch Bend Range", 1, 24, 1, 0, " ST", 0 },
+    { "Gate Format", 0, 2, 1, gate_formats, 0, 0 },
+    { "Gate Retrig", 0, MK_RETRIGS - 1, 1, retrigs, 0, 0 },
+    { "Mod 1 Source", 0, MK_MOD_SOURCES - 1, 1, mod_sources, 0, 0 },
+    { "Mod 1 Max Volt", 1, 10, 1, 0, " V", 0 },
+    { "Mod 2 Source", 0, MK_MOD_SOURCES - 1, 1, mod_sources, 0, 0 },
+    { "Mod 2 Max Volt", 1, 10, 1, 0, " V", 0 },
 };
 
 /* Arp Length and Arp Retrigger are the stock menu's two entries; the rest has no menu there. */
@@ -391,6 +412,34 @@ static void scale_set(int which, int value) {
     else app.dirty = 1;
 }
 
+static uint8_t *cv_field(int which) {
+    mk_cv_settings *c = &app.settings.cv;
+    switch (which) {
+    case V_FORMAT: return &c->pitch_format;
+    case V_REF: return &c->pitch_ref;
+    case V_BEND: return &c->bend_range;
+    case V_GATE: return &c->gate_format;
+    case V_RETRIG: return &c->gate_retrig;
+    case V_SOURCE_1: return &c->mod_source[0];
+    case V_VOLTS_1: return &c->mod_volts[0];
+    case V_SOURCE_2: return &c->mod_source[1];
+    default: return &c->mod_volts[1];
+    }
+}
+
+static int cv_get(int which) {
+    const entry *e = &cv_entries[which];
+    int value = *cv_field(which);
+    return value < e->low ? e->low : value > e->high ? e->high : value;
+}
+
+static void cv_set(int which, int value) {
+    *cv_field(which) = (uint8_t)value;
+    cv_apply();
+    app.settings_dirty = 1;
+}
+
+static const menu cv_menu = { cv_entries, CV_ENTRIES, cv_get, cv_set };
 static const menu arp_menu = { arp_entries, ARP_ENTRIES, arp_get, arp_set };
 static const menu chord_menu = { chord_entries, CHORD_ENTRIES, chord_get, chord_set };
 static const menu scale_menu = { scale_entries, SCALE_ENTRIES, scale_get, scale_set };
@@ -406,6 +455,7 @@ static const menu *current_menu(void) {
     case PAGE_ARP: return &arp_menu;
     case PAGE_CHORD: return &chord_menu;
     case PAGE_SCALE: return &scale_menu;
+    case PAGE_CV: return &cv_menu;
     default: return 0;
     }
 }
@@ -527,7 +577,10 @@ void pages_click(void) {
     app.redraw = 1;
     if (kind == PAGE_CHAIN) pages_close();
     else if (kind == PAGE_STEPS && level == LIST) level = INSIDE;
-    else {
+    else if (kind == PAGE_GLOBAL && shown == G_CV) {
+        kind = PAGE_CV;
+        shown = 0;
+    } else {
         if (editing && kind == PAGE_TRACK && shown == T_QUANTIZE) ui_quantize(quantize_strength);
         if (editing && kind == PAGE_TRACK && shown == T_CLEAR_AUTOM) clear_autom(autom_choice);
         editing = !editing;
@@ -538,6 +591,10 @@ void pages_back(void) {
     app.redraw = 1;
     if (editing) editing = 0;
     else if (kind == PAGE_STEPS && level == INSIDE) level = LIST;
+    else if (kind == PAGE_CV) {
+        kind = PAGE_GLOBAL;
+        shown = G_CV;
+    }
     else pages_close();
 }
 
@@ -694,6 +751,9 @@ int pages_draw(void) {
         return 1;
     case PAGE_SCALE:
         menu_screen("Scale", &scale_menu);
+        return 1;
+    case PAGE_CV:
+        menu_screen("CV Settings", &cv_menu);
         return 1;
     default:
         return 0;

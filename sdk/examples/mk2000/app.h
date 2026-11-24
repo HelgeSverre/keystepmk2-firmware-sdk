@@ -6,7 +6,7 @@
 
 enum { REC_OFF, REC_STEP, REC_LIVE };
 enum { LAYER_HOME, LAYER_SHIFT, LAYER_CHANNEL, LAYER_TRACKS, LAYER_LENGTH, LAYER_SAVE, LAYER_ARP, LAYER_CHORD };
-enum { PAGE_NONE, PAGE_STEPS, PAGE_TRACK, PAGE_GLOBAL, PAGE_CHAIN, PAGE_ARP, PAGE_CHORD, PAGE_SCALE };
+enum { PAGE_NONE, PAGE_STEPS, PAGE_TRACK, PAGE_GLOBAL, PAGE_CHAIN, PAGE_ARP, PAGE_CHORD, PAGE_SCALE, PAGE_CV };
 enum { PAGE_KEY_PLAYS, PAGE_KEY_USED, PAGE_KEY_TRACK };     /* what pages_key did with a key */
 #define NO_SLOT 0xFF
 #define FIRST_NUMBERED 4        /* keys 4-19 carry the numbers 1-16 */
@@ -65,6 +65,14 @@ void app_mutate_reset(void);                    /* and back to that */
 int app_mutated(void);                          /* 1 while the selected track is a variation */
 uint32_t app_beat_phase(void);                  /* ticks into the current quarter note, 0 to 95 */
 int app_external_tempo(void);                   /* tenths of a BPM of the clock followed; 0 not heard, -1 own clock */
+
+/* cv.c: what plays on track 1's channel also plays on the CV outputs */
+void cv_note(uint8_t note, uint8_t velocity);   /* velocity 0 = off */
+void cv_stop(void);                             /* gate down, whatever is held */
+void cv_source(int source, int value);          /* MK_MOD_AFTERTOUCH or MK_MOD_WHEEL moved: 0 to 127 */
+void cv_bend(int bend14);
+void cv_apply(void);                            /* after a change to app.settings.cv */
+void cv_poll(uint32_t now);
 
 /* controls.c */
 void controls_poll(uint32_t now);               /* the strips, aftertouch and the pedal */
