@@ -184,3 +184,22 @@ and Arturia's tool flashes a unit found that way.
 `tools/ksflash.py verify IMAGE` and `read OUT` do the read-back (uploads from block 2, status and
 abort only); `verify` confirmed the unit against the 1.0.2 package.
 
+### The same update with `tools/ksflash.py`
+
+Same unit, same day, from an update mode entered with Tempo: `ksflash.py flash
+firmware/keystep_mk2__1_0_2.ks2fw --real`.
+
+- `0xF4` (select image), 6711 download blocks of 64 bytes with a status poll after each, a
+  zero-length block and `0xF3`: accepted, and the unit restarted into the application with its
+  own serial. The sequence read from MIDI Control Center's code is what the bootloader takes.
+- `ksflash.py verify`: the 429,384 bytes from `0x08008000` identical to the package; the last
+  eight bytes of flash unchanged.
+- Request `0xF2` to the running application: the unit came back as `KeyStep mk2 Updater` with
+  the application's serial, `4651400812010772`. So the serial is handed over through RAM, as read
+  from the code, and is noise only after a cold start.
+- `0xF3` with no download before it does not start the application: the state becomes 8
+  (dfuMANIFEST-WAIT-RESET) and stays. A USB bus reset then gives dfuIDLE, still in update mode.
+  Switching off and on starts the application.
+- While the device changes identity, its string descriptors cannot be read for a moment
+  (pyusb: "The device has no langid").
+

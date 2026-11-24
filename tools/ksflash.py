@@ -5,18 +5,19 @@
     uv run --with unicorn tools/ksflash.py selftest                           # the refusals, in the emulator
     uv run tools/ksflash.py check IMAGE                                       # the image checks only
     uv run --with pyusb tools/ksflash.py probe                                # read a real device's descriptors
-    uv run --with pyusb tools/ksflash.py verify IMAGE                         # update mode: compare the flash (reads only)
-    uv run --with pyusb tools/ksflash.py read OUT                             # update mode: save the flash (reads only)
-    uv run --with pyusb tools/ksflash.py flash IMAGE --real                   # a real device: NOT TESTED
+    uv run --with pyusb tools/ksflash.py verify IMAGE                         # compare the flash (reads only)
+    uv run --with pyusb tools/ksflash.py read OUT                             # save the flash (reads only)
+    uv run --with pyusb tools/ksflash.py flash IMAGE --real                   # a real device
 
 What is and is not known:
 - The sequence (0xF2 enter, 0xF4 select image, DFU download blocks with status polls, a
-  zero-length block, 0xF3 leave) is read from MIDI Control Center's code. It has not been seen
-  on the wire, and the bootloader that answers it has not been read.
+  zero-length block, 0xF3 leave) is read from MIDI Control Center's code. The bootloader that
+  answers it has not been read.
 - `sim` and `selftest` run against FakeBootloader below, which is that reading turned into
   code. They test this tool's logic and refusals, not the real bootloader.
-- `flash --real` has never been run. Do not use it before update mode has been observed on the
-  unit and a stock image has been flashed through MIDI Control Center (docs/ROADMAP.md).
+- `flash --real` has flashed stock 1.0.2 to one unit, from an update mode entered with Tempo,
+  and the read-back was identical (docs/BOOTLOADER.md, 2026-11-24). Nothing but a stock image has
+  been sent to a unit with it.
 
 The tool refuses: an image that fails tools/fwpack.py's checks, a device that is not
 1C75:0228/0229 with a firmware-update interface, and a device in update mode whose identity
@@ -377,7 +378,7 @@ class UsbTransport:
                         continue
                     if serial is None or device.serial == serial:
                         return device
-            except OSError:  # the device is between two identities
+            except (OSError, ValueError):  # the device is between two identities: no strings yet
                 continue
         return None
 
@@ -516,12 +517,32 @@ def cmd_probe(_args) -> int:
     return 0
 
 
-def cmd_read(args) -> int:
-    device = UsbTransport().find()
+def read_device(length: int) -> bytes:
+    """Read back from the connected unit. A running application is asked for update mode first
+    (request 0xF2, as MIDI Control Center does); the unit then stays there until switched off."""
+    transport = UsbTransport()
+    device = transport.find()
     if device is None:
         raise Refused("no device found")
     print(f"found {device.describe()}")
-    data = read_back(device, args.length)
+    check_identity(device)
+    entered = not device.update_mode
+    if entered:
+        serial = device.serial
+        print("asking the application for update mode (request 0xF2)")
+        device.control(0x21, ENTER, 0, device.dfu_interface, b"")
+        device = transport.wait(serial, update_mode=True, timeout_s=30)
+        if device is None:
+            raise Refused("the device did not come back in update mode within 30 s")
+        print(f"now   {device.describe()}")
+    data = read_back(device, length)
+    if entered:  # 0xF3 only starts the application after a download (docs/BOOTLOADER.md)
+        print("the unit stays in update mode: switch it off and on to start the application")
+    return data
+
+
+def cmd_read(args) -> int:
+    data = read_device(args.length)
     args.out.write_bytes(data)
     print(f"wrote {args.out} ({len(data)} bytes)")
     return 0
@@ -530,11 +551,7 @@ def cmd_read(args) -> int:
 def cmd_verify(args) -> int:
     image, _number = load_image(args.image)
     body = image[fwpack.HEADER_SIZE :]
-    device = UsbTransport().find()
-    if device is None:
-        raise Refused("no device found")
-    print(f"found {device.describe()}")
-    data = read_back(device, len(body))
+    data = read_device(len(body))
     if data == body:
         print(f"the flash holds {args.image.name}: {len(body)} bytes identical")
         return 0
@@ -546,9 +563,9 @@ def cmd_verify(args) -> int:
 
 def cmd_flash(args) -> int:
     if not args.real:
-        sys.exit("error: this would write to a real device and has never been tested. Use `sim`, or add --real.")
+        sys.exit("error: this would write to a real device. Use `sim`, or add --real.")
     image, number = load_image(args.image)
-    print("This has never been run against a real KeyStep. Type FLASH to go on: ", end="", flush=True)
+    print(f"This writes {args.image.name} to the connected KeyStep. Type FLASH to go on: ", end="", flush=True)
     if sys.stdin.readline().strip() != "FLASH":
         sys.exit("stopped")
     flash(UsbTransport(), image, number)
@@ -566,12 +583,12 @@ def main() -> int:
                    help="the firmware the emulated device runs before the update (default: stock 1.0.2)")  # fmt: skip
     sub.add_parser("selftest", help="the update and every refusal, in the emulator")
     sub.add_parser("probe", help="print the descriptors of connected Arturia devices (reads only)")
-    p = sub.add_parser("read", help="update mode: save the flash from 0x08008000 to a file (reads only)")
+    p = sub.add_parser("read", help="save the flash from 0x08008000 to a file (reads only)")
     p.add_argument("out", type=Path)
     p.add_argument("--length", type=lambda v: int(v, 0), default=fwpack.FLASH_END - fwpack.LOAD_ADDRESS)
-    p = sub.add_parser("verify", help="update mode: compare the flash with an image (reads only)")
+    p = sub.add_parser("verify", help="compare the flash with an image (reads only)")
     p.add_argument("image", type=Path)
-    p = sub.add_parser("flash", help="flash a real device: untested")
+    p = sub.add_parser("flash", help="flash a real device")
     p.add_argument("image", type=Path)
     p.add_argument("--real", action="store_true")
     args = parser.parse_args()

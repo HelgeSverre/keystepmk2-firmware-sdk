@@ -3,11 +3,11 @@
 Goal: flash our own firmware safely, with an SDK, a toolchain and an emulator, and a multi-track
 MIDI sequencer as the demonstration. The method follows `../reverse-engineering/jt4000`.
 
-Status as of 2026-11-24. Phases 3 and the first half of 4 are done on one unit: update mode
-entered with Tempo, the flash read back through DFU upload, and stock 1.0.2 flashed through MIDI
-Control Center from update mode and verified by reading it back ([BOOTLOADER.md](BOOTLOADER.md),
-"Seen on a device"). Nothing of ours has been flashed. Next: stock 1.0.2 with `tools/ksflash.py`,
-then the one-byte test.
+Status as of 2026-11-24. Phases 3 and 4 are done on one unit: update mode entered with Tempo,
+the flash read back through DFU upload, and stock 1.0.2 flashed from update mode first through
+MIDI Control Center and then with `tools/ksflash.py`, each verified by reading the flash back
+([BOOTLOADER.md](BOOTLOADER.md), "Seen on a device"). Nothing but stock 1.0.2 has been flashed.
+Next: the one-byte test.
 
 ## The gating question
 
