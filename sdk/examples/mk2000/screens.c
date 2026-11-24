@@ -310,6 +310,7 @@ void lights_update(uint32_t buttons) {
 
     want[KS_LED_SEQ] = scale(track_colour[app.track], app.settings.seq_on ? bright : dim);
     want[KS_LED_ARP] = app.settings.arp_on ? scale(white, bright) : 0;
+    want[KS_LED_MUTATE] = app_mutated() ? scale(white, bright) : 0;
     want[KS_LED_CHORD] = app.settings.chord.on ? scale(white, bright) : 0;
     want[KS_LED_PLAY] = playing && beat ? scale(0x00FF20, bright) : playing ? scale(0x00FF20, dim) : 0;
     want[KS_LED_STOP] = playing ? 0 : scale(white, dim);

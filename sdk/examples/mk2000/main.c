@@ -13,6 +13,8 @@ static mk_pattern buffers[3];           /* two the engine alternates between, on
 #define SCRATCH (&buffers[2])
 static mk_track undo;
 static uint8_t undo_track = 0xFF;
+static mk_track originals[MK_TRACKS];   /* Mutate: each track as it was before its first variation */
+static uint8_t mutated;                 /* a bit per track that is a variation now */
 static volatile uint8_t switched;
 static volatile uint32_t ticks;
 static uint32_t period_rest;
@@ -45,9 +47,26 @@ static void send_to(int to, const uint8_t *bytes, int n) {
 
 static void send(const uint8_t *bytes, int n) { send_to(TO_DIN | TO_USB, bytes, n); }
 
+void app_send(const uint8_t *bytes, int n) { send(bytes, n); }
+
+/* Whatever plays on track 1's channel - the track, the keys, the arp - also plays on the CV
+ * outputs: the last note's pitch, the gate while any of them is held, and its velocity on Mod 1,
+ * on the scale the stock firmware uses (1545 at the top). */
 void app_note(uint8_t channel, uint8_t note, uint8_t velocity) {
     uint8_t message[3] = { (uint8_t)((velocity ? 0x90 : 0x80) | channel), note, velocity };
     send(message, 3);
+    if (channel != mk_engine_pattern()->track[0].channel) return;
+    uint32_t state = app_lock();
+    if (velocity) {
+        int value = (note - 36) * 65536 / 120;
+        ks_cv_pitch((uint16_t)(value < 0 ? 0 : value > 65535 ? 65535 : value));
+        ks_cv_mod(0, (uint16_t)(velocity * 1545 / 127));
+        gate_holders++;
+    } else if (gate_holders) {
+        gate_holders--;
+    }
+    ks_gate(gate_holders != 0);
+    app_unlock(state);
 }
 
 uint8_t app_keys_channel(void) {
@@ -74,16 +93,8 @@ uint32_t app_beat_phase(void) { return ticks % MK_PPQN; }
 /* ---- what the engine sends ---- */
 
 static void engine_note(int track, uint8_t channel, uint8_t note, uint8_t velocity) {
+    (void)track;
     app_note(channel, note, velocity);
-    if (track != 0) return;                             /* track 1 also plays on the CV outputs */
-    if (velocity) {
-        int value = (note - 36) * 65536 / 120;
-        ks_cv_pitch((uint16_t)(value < 0 ? 0 : value > 65535 ? 65535 : value));
-        gate_holders++;
-    } else if (gate_holders) {
-        gate_holders--;
-    }
-    ks_gate(gate_holders != 0);
 }
 
 static void engine_controller(int track, uint8_t channel, int which, uint8_t value) {
@@ -98,7 +109,7 @@ static void engine_controller(int track, uint8_t channel, int which, uint8_t val
         n = 2;
     } else {
         message[0] = (uint8_t)(0xB0 | channel);
-        message[1] = which == MK_CTL_MOD ? 1 : 11;
+        message[1] = which == MK_CTL_MOD ? 1 : 64;
     }
     send(message, n);
 }
@@ -544,6 +555,7 @@ void app_save(int slot) {
         app.settings.slot = app.slot;
         app.settings_dirty = 1;
         app.dirty = 0;
+        mutated = 0;                                    /* what was saved is the pattern now */
     }
     app_message(result == MK_STORE_OK ? "Pattern Saved" : result == MK_STORE_FULL ? "Memory Full" : "Save Failed");
 }
@@ -556,6 +568,7 @@ void app_reload(void) {
     for (int t = 0; t < MK_TRACKS; t++) mk_engine_edited(t);
     app.dirty = 0;
     undo_track = 0xFF;
+    mutated = 0;
     app_message("Pattern Reloaded");
 }
 
@@ -579,6 +592,43 @@ void app_undo(void) {
     app.dirty = 1;
     app_message("Undo");
 }
+
+/* Mutate, as in the stock firmware: every press is a new variation of the track as it was before
+ * the first one, and the reset brings that back. Saving keeps the variation; loading, reloading
+ * or changing pattern forgets there was one. */
+void app_mutate(void) {
+    static mk_track work;
+    mk_track *track = &mk_engine_pattern()->track[app.track];
+    uint32_t state = app_lock();
+    if (!(mutated >> app.track & 1)) memcpy(&originals[app.track], track, sizeof *track);
+    memcpy(&work, track, sizeof work);
+    app_unlock(state);
+    if (!mk_track_used(&originals[app.track])) {
+        app_message("Track is empty");
+        return;
+    }
+    mutated |= (uint8_t)(1 << app.track);
+    mk_mutate(&work, &originals[app.track], engine_random);
+    state = app_lock();
+    memcpy(track->step, work.step, sizeof track->step);
+    app_unlock(state);
+    mk_engine_edited(app.track);
+    app.dirty = 1;
+    app_message("Track Mutated");
+}
+
+void app_mutate_reset(void) {
+    if (!(mutated >> app.track & 1)) return;
+    mk_track *track = &mk_engine_pattern()->track[app.track];
+    uint32_t state = app_lock();
+    memcpy(track->step, originals[app.track].step, sizeof track->step);
+    app_unlock(state);
+    mutated &= (uint8_t)~(1 << app.track);
+    mk_engine_edited(app.track);
+    app_message("Mutate Reset");
+}
+
+int app_mutated(void) { return mutated >> app.track & 1; }
 
 /* ---- start ---- */
 
@@ -619,6 +669,7 @@ int main(void) {
     uint32_t last_draw = 0;
     for (;;) {
         ui_poll();
+        controls_poll(ks_millis());
         sync_poll();
         thru_poll(&din_in, KS_MIDI_DIN);
         thru_poll(&usb_in, KS_MIDI_USB);
@@ -630,6 +681,7 @@ int main(void) {
             app.settings_dirty = 1;
             app.dirty = 0;
             undo_track = 0xFF;
+            mutated = 0;
             app.redraw = 1;
             chain_next();
         }

@@ -14,9 +14,10 @@
 
 enum { LIST, INSIDE };          /* the step page's levels */
 enum { F_VELOCITY, F_GATE, F_PROBABILITY, F_RATCHET, F_CONDITION, F_TIE, F_OFFSET, FIELDS };
-enum { T_CHANNEL, T_LENGTH, T_DIVISION, T_SWING, T_GATE, T_DIRECTION, T_FOLLOWS, T_SHIFT, T_QUANTIZE, TRACK_ENTRIES };
-enum { G_BRIGHTNESS, G_PATTERN_CHANGE, G_TEMPO, G_OVERDUB, G_REC_QUANTIZE, G_KEYS, G_HOME_CHANNEL, G_SYNC, G_DIN_THRU,
-       G_USB_THRU, G_ABOUT, GLOBAL_ENTRIES };
+enum { T_CHANNEL, T_LENGTH, T_DIVISION, T_SWING, T_GATE, T_DIRECTION, T_FOLLOWS, T_SHIFT, T_QUANTIZE, T_CLEAR_AUTOM,
+       TRACK_ENTRIES };
+enum { G_BRIGHTNESS, G_PATTERN_CHANGE, G_TEMPO, G_OVERDUB, G_REC_QUANTIZE, G_REC_AUTOM, G_KEYS, G_HOME_CHANNEL,
+       G_AFTERTOUCH, G_SYNC, G_DIN_THRU, G_USB_THRU, G_ABOUT, GLOBAL_ENTRIES };
 enum { A_LENGTH, A_RETRIGGER, A_MODE, A_OCTAVES, A_DIVISION, A_GATE, A_SWING, ARP_ENTRIES };
 enum { C_PRESET, C_STRUM, C_STRUM_TYPE, C_VOICING, CHORD_ENTRIES };
 enum { S_GLOBAL, S_GLOBAL_ROOT, S_PATTERN, S_PATTERN_ROOT, SCALE_ENTRIES };
@@ -45,6 +46,8 @@ static const char *const tempo_changes[] = { "When stopped", "Always", "Never" }
 static const char *const key_states[] = { "Home", "Track" };
 static const char *const sync_sources[MK_SYNC_COUNT] = { "Auto", "Internal", "USB", "MIDI Din", "Sync In" };
 static const char *const version[] = { ks_version };
+static const char *const sensitivities[] = { "Off", "Low", "Medium", "High" };
+static const char *const automations[MK_CONTROLLERS + 1] = { "Bend", "Mod", "Aftertouch", "Pedal", "All" };
 static const char *const voicings[] = { "Off", "Bass -1", "Bass -2", "Bass -3" };
 /* The pattern's scale in the order the stock menu has it: Off, Global, then the scales. */
 static const char *const pattern_scales[MK_SCALE_COUNT + 1] = {
@@ -74,6 +77,7 @@ static const entry track_entries[TRACK_ENTRIES] = {
     { "Follows transpose", 0, 1, 1, off_on, 0, 0 },
     { "Shift", -48, 48, 1, 0, " st", 0 },
     { "Quantize", 50, 100, 50, 0, " %", 0 },     /* an action: the click that ends the edit does it */
+    { "Clear Autom", 0, MK_CONTROLLERS, 1, automations, 0, 0 },    /* an action too */
 };
 
 static const entry global_entries[GLOBAL_ENTRIES] = {
@@ -82,8 +86,10 @@ static const entry global_entries[GLOBAL_ENTRIES] = {
     { "Tempo on change", 0, 2, 1, tempo_changes, 0, 0 },
     { "Overdub", 0, 1, 1, off_on, 0, 0 },
     { "Rec Quantize", 0, 1, 1, off_on, 0, 0 },
+    { "Rec Autom", 0, 1, 1, off_on, 0, 0 },
     { "Keys", 0, 1, 1, key_states, 0, 0 },
     { "Home channel", 1, 16, 1, 0, 0, 0 },
+    { "Aft Sensitivity", 0, 3, 1, sensitivities, 0, 0 },
     { "Clock Receive", 0, MK_SYNC_COUNT - 1, 1, sync_sources, 0, 0 },
     { "MIDI Thru", 0, 1, 1, off_on, 0, 0 },
     { "USB to MIDI", 0, 1, 1, off_on, 0, 0 },
@@ -203,6 +209,20 @@ static void enter_note(int key, uint8_t note, uint8_t velocity) {
 }
 
 static uint8_t quantize_strength = 100;
+static uint8_t autom_choice = MK_CONTROLLERS;   /* Clear Autom: one controller, or all */
+
+/* Takes what was recorded from a strip, pressure or the pedal off every step of the track. */
+static void clear_autom(int which) {
+    mk_track *t = track();
+    before_edit();
+    uint32_t state = app_lock();
+    for (int s = 0; s < MK_STEPS; s++)
+        for (int c = 0; c < MK_CONTROLLERS; c++)
+            if (which == c || which == MK_CONTROLLERS) t->step[s].controller[c] = MK_CTL_NONE;
+    app_unlock(state);
+    after_edit();
+    app_message("Autom Cleared");
+}
 
 static int track_get(int which) {
     const mk_track *t = track();
@@ -215,6 +235,7 @@ static int track_get(int which) {
     case T_DIRECTION: return t->direction;
     case T_FOLLOWS: return t->follows_transpose;
     case T_QUANTIZE: return quantize_strength;
+    case T_CLEAR_AUTOM: return autom_choice;
     default: return t->shift;
     }
 }
@@ -223,6 +244,10 @@ static void track_set(int which, int value) {
     mk_track *t = track();
     if (which == T_QUANTIZE) {
         quantize_strength = (uint8_t)value;
+        return;
+    }
+    if (which == T_CLEAR_AUTOM) {
+        autom_choice = (uint8_t)value;
         return;
     }
     before_edit();
@@ -251,7 +276,12 @@ static int global_get(int which) {
     case G_PATTERN_CHANGE: return s->pattern_change;
     case G_TEMPO: return s->tempo_follows_pattern;
     case G_OVERDUB: return s->overdub;
-    case G_REC_QUANTIZE: return !s->rec_unquantized;
+    case G_REC_QUANTIZE: return !(s->options & MK_OPT_REC_UNQUANTIZED);
+    case G_REC_AUTOM: return !(s->options & MK_OPT_NO_AUTOM);
+    case G_AFTERTOUCH: {                                /* stored: 0 medium, 1 low, 2 high, 3 off */
+        static const uint8_t shown_as[4] = { 2, 1, 3, 0 };
+        return shown_as[(s->options & MK_OPT_AFTERTOUCH) >> MK_OPT_AFTERTOUCH_SHIFT];
+    }
     case G_KEYS: return s->keys_on_track;
     case G_HOME_CHANNEL: return s->home_channel + 1;
     case G_SYNC: return s->sync_source < MK_SYNC_COUNT ? s->sync_source : MK_SYNC_AUTO;
@@ -269,7 +299,13 @@ static void global_set(int which, int value) {
     case G_PATTERN_CHANGE: s->pattern_change = (uint8_t)value; break;
     case G_TEMPO: s->tempo_follows_pattern = (uint8_t)value; break;
     case G_OVERDUB: s->overdub = (uint8_t)value; break;
-    case G_REC_QUANTIZE: s->rec_unquantized = (uint8_t)!value; break;
+    case G_REC_QUANTIZE: s->options = (uint8_t)(value ? s->options & ~MK_OPT_REC_UNQUANTIZED : s->options | MK_OPT_REC_UNQUANTIZED); break;
+    case G_REC_AUTOM: s->options = (uint8_t)(value ? s->options & ~MK_OPT_NO_AUTOM : s->options | MK_OPT_NO_AUTOM); break;
+    case G_AFTERTOUCH: {
+        static const uint8_t stored_as[4] = { 3, 1, 0, 2 };
+        s->options = (uint8_t)((s->options & ~MK_OPT_AFTERTOUCH) | stored_as[value] << MK_OPT_AFTERTOUCH_SHIFT);
+        break;
+    }
     case G_KEYS: s->keys_on_track = (uint8_t)value; break;
     case G_HOME_CHANNEL: s->home_channel = (uint8_t)(value - 1); break;
     case G_SYNC: s->sync_source = (uint8_t)value; break;          /* main.c follows the new one at once */
@@ -493,6 +529,7 @@ void pages_click(void) {
     else if (kind == PAGE_STEPS && level == LIST) level = INSIDE;
     else {
         if (editing && kind == PAGE_TRACK && shown == T_QUANTIZE) ui_quantize(quantize_strength);
+        if (editing && kind == PAGE_TRACK && shown == T_CLEAR_AUTOM) clear_autom(autom_choice);
         editing = !editing;
     }
 }

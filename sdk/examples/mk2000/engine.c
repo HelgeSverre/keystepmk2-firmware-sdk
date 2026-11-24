@@ -589,6 +589,21 @@ int mk_engine_record(int track, uint8_t note, uint8_t velocity, int quantize) {
     return step;
 }
 
+int mk_engine_record_controller(int track, int which, uint8_t value) {
+    if (track < 0 || track >= MK_TRACKS || which < 0 || which >= MK_CONTROLLERS || value > 127) return -1;
+    lock();
+    int step = -1;
+    if (playing) {
+        track_state *s = &tracks[track];
+        mk_track *tr = &pattern->track[track];
+        step = s->fresh ? upcoming(s, tr) : s->pos;
+        tr->step[step].controller[which] = value;
+        s->sent[which] = value;                         /* the control itself has just sent it */
+    }
+    unlock();
+    return step;
+}
+
 /* Bring the position inside the track again, keeping the step it is on when that still exists
  * and the way a pendulum is going, so the next step follows on from it. */
 static void place(track_state *s, const mk_track *tr) {

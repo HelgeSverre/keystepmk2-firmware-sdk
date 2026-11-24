@@ -120,7 +120,7 @@ static void record_key(const uint8_t *notes, int n, uint8_t velocity) {
     if (app.recording == REC_LIVE && !mk_engine_playing()) return;     /* still counting in */
     if (!rec_started) record_first_note();
     if (app.recording == REC_LIVE) {
-        for (int i = 0; i < n; i++) mk_engine_record(app.track, notes[i], velocity, !app.settings.rec_unquantized);
+        for (int i = 0; i < n; i++) mk_engine_record(app.track, notes[i], velocity, !(app.settings.options & MK_OPT_REC_UNQUANTIZED));
         app.dirty = 1;
         return;
     }
@@ -538,6 +538,10 @@ static void pressed_button(uint32_t button, uint32_t buttons, uint32_t now) {
         arp_alone = !others;
         arp_at = now;
         combo_used = 0;
+        break;
+    case KS_BTN_MUTATE:                                 /* both as in the stock firmware */
+        if (others == KS_BTN_SHIFT) app_mutate_reset();
+        else if (!others && !app.recording) app_mutate();
         break;
     case KS_BTN_CHORD:
         if (others == KS_BTN_SHIFT) {                   /* the stock gesture */

@@ -5,6 +5,8 @@
  *   ui.c        buttons, layers and gestures
  *   arp.c       the arpeggiator on the keys; no hardware access
  *   harmony.c   scales and chords: tables and arithmetic; no hardware access
+ *   mutate.c    Mutate: a variation of a track; no hardware access
+ *   controls.c  the strips, aftertouch and the pedal: what they send, and recording them
  *   pages.c     the menu pages: steps, track and global settings, chain
  *   screens.c   the display
  *   clock.c     following an external clock; no hardware access
@@ -30,7 +32,8 @@
 
 /* ---- pattern data ---- */
 
-enum { MK_CTL_BEND, MK_CTL_MOD, MK_CTL_PRESSURE, MK_CTL_PEDAL };
+enum { MK_CTL_BEND, MK_CTL_MOD, MK_CTL_PRESSURE, MK_CTL_PEDAL };      /* pitch bend (its top 7 bits), CC 1,
+                                                                           channel pressure, CC 64 */
 #define MK_CTL_NONE 0xFF        /* nothing recorded for this step */
 
 enum { MK_STEP_TIE = 1 };       /* flags: the notes run into the next step without a new attack */
@@ -138,6 +141,10 @@ mk_pattern *mk_engine_pending(void);    /* waiting to take over, or NULL */
  * empty step sets the step's offset: 0 when `quantize` is set, else how far from the step's grid
  * time the note was played; later notes into the step keep it. */
 int mk_engine_record(int track, uint8_t note, uint8_t velocity, int quantize);
+/* Live recording of a controller (MK_CTL_, value 0 to 127): into the step the track is on, since a
+ * value holds from its step until the next one that has a value. The engine takes it as sent.
+ * Returns the step, or -1 when stopped. */
+int mk_engine_record_controller(int track, int which, uint8_t value);
 /* The pattern was edited from outside (step page, clear, length): re-check positions against lengths
  * and end notes that no longer belong. */
 void mk_engine_edited(int track);
@@ -217,6 +224,13 @@ void mk_chord_order(uint8_t *notes, int n, int strum_type, uint32_t (*random)(vo
 /* Make these notes (any order, up to MK_CHORD_NOTES, within two octaves of the lowest) the user chord. */
 void mk_chord_learn(mk_chord_settings *chord, const uint8_t *notes, int n);
 
+/* ---- Mutate ---- */
+
+/* Make the steps of `track`, within its length, a variation of the same steps of `original`: as
+ * many steps with notes, the same velocities, some moved a step, some with the notes of another
+ * step, a few an octave away. Never the same as the original while it has a note. */
+void mk_mutate(mk_track *track, const mk_track *original, uint32_t (*random)(void));
+
 /* ---- following an external clock: the ticks between two of its pulses, spread out ----
  *
  * Each pulse is worth a fixed number of ticks (4 for a MIDI clock, 24 for a sixteenth on the
@@ -256,13 +270,18 @@ typedef struct {
     mk_arp_settings arp;
     uint8_t din_thru;                   /* 1 = what comes in on DIN goes out on DIN and USB */
     uint8_t usb_thru;                   /* 1 = what comes in on USB goes out on DIN */
-    uint8_t rec_unquantized;            /* 1 = Rec Quantize Off: live notes keep their timing. 0 (On) is
-                                           what settings saved before it existed hold */
+    uint8_t options;                    /* MK_OPT_; 0 is what settings saved before these existed hold */
     uint8_t scale;                      /* the global scale, MK_SCALE_ */
     uint8_t root;                       /* and its root, 0 (C) to 11 (B) */
     mk_chord_settings chord;
 } mk_settings;
 #define MK_SETTINGS_VERSION 1
+enum {
+    MK_OPT_REC_UNQUANTIZED = 1,         /* Rec Quantize Off: live notes keep their timing */
+    MK_OPT_NO_AUTOM = 2,                /* Rec Autom Off: the strips, pressure and pedal are not recorded */
+    MK_OPT_AFTERTOUCH = 12,             /* two bits: 0 = medium, 1 = low, 2 = high sensitivity, 3 = off */
+};
+#define MK_OPT_AFTERTOUCH_SHIFT 2
 
 typedef struct {
     uint8_t on;

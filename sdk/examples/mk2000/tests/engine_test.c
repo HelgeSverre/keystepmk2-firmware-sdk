@@ -636,6 +636,38 @@ static void test_controllers(void) {
     ok("controllers sent once per change", before);
 }
 
+/* A controller moved while recording goes into the step the track is on and plays back from
+ * there; the step's old value is not sent again in between. */
+static void test_record_controllers(void) {
+    int before = failures;
+    setup();
+    pa.track[0].length = 4;
+    CHECK_EQ(mk_engine_record_controller(0, MK_CTL_MOD, 50), -1);      /* stopped */
+    mk_engine_start();
+    CHECK_EQ(mk_engine_record_controller(0, MK_CTL_MOD, 10), 0);       /* before the first tick: step 1 */
+    run(30);                                            /* six ticks into step 2 */
+    CHECK_EQ(mk_engine_record_controller(0, MK_CTL_MOD, 70), 1);
+    CHECK_EQ(mk_engine_record_controller(0, MK_CTL_MOD, 90), 1);       /* the last value of a step stays */
+    CHECK_EQ(mk_engine_record_controller(0, MK_CTL_BEND, 64), 1);
+    CHECK_EQ(mk_engine_record_controller(0, MK_CTL_MOD, 128), -1);
+    CHECK_EQ(mk_engine_record_controller(0, MK_CONTROLLERS, 1), -1);
+    CHECK_EQ(mk_engine_record_controller(MK_TRACKS, 0, 1), -1);
+    CHECK_EQ(pa.track[0].step[0].controller[MK_CTL_MOD], 10);
+    CHECK_EQ(pa.track[0].step[1].controller[MK_CTL_MOD], 90);
+    CHECK_EQ(pa.track[0].step[1].controller[MK_CTL_BEND], 64);
+    CHECK_EQ(pa.track[0].step[2].controller[MK_CTL_MOD], MK_CTL_NONE);
+    run(96 - 30);
+    uint32_t ticks[8];
+    CHECK_EQ(collect(CTL, 0, MK_CTL_MOD, ticks, 8), 0); /* the engine sent nothing: the control did */
+    logged = 0;
+    run(96);                                            /* the second pass plays it back */
+    CHECK_EQ(collect(CTL, 0, MK_CTL_MOD, ticks, 8), 2);
+    CHECK_EQ(ticks[0], 96);
+    CHECK_EQ(ticks[1], 120);
+    CHECK_EQ(collect(CTL, 0, MK_CTL_BEND, ticks, 8), 0);        /* 64 was the last value sent */
+    ok("controllers recorded into the step being played", before);
+}
+
 static void test_switch(void) {
     int before = failures;
     setup();
@@ -1267,6 +1299,7 @@ int main(void) {
     test_transpose();
     test_range();
     test_controllers();
+    test_record_controllers();
     test_switch();
     test_record();
     test_edited();

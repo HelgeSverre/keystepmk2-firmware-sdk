@@ -573,7 +573,7 @@ def check_mk_global_settings() -> str:
     turn(board, 1)
     tap(board, "encoder")
     assert "At once" in small_text(board), small_text(board)
-    turn(board, 9)  # About, the last entry
+    menu_to(board, "About")  # the last entry
     tap(board, "encoder")
     assert "of 31 sectors" in small_text(board), small_text(board)
     tap(board, "back")
@@ -1018,6 +1018,176 @@ def held_page(board: emu.Board, button: str) -> None:
     hold(board, button)
     tap(board, "encoder")
     let_go(board, button)
+
+
+def sent(board: emu.Board, ms: float = 60) -> bytes:
+    """What goes out on DIN in the next `ms`, without the clock."""
+    board.midi_out.clear()
+    board.run(ms)
+    data = bytes(b for b in board.midi_out if b < 0xF8)
+    board.midi_out.clear()
+    return data
+
+
+def check_mk_controls() -> str:
+    board = mk2000()
+    board.set_touch(1, 0.75)
+    data = sent(board)
+    value = data[1] | data[2] << 7
+    assert data[0] == 0xE0 and len(data) == 3 and near(value, 12288, 200), f"bend at three quarters: {data.hex(' ')}"
+    board.set_touch(1, 1.0)
+    assert sent(board) == bytes([0xE0, 0x7F, 0x7F]), "bend at the top"
+    board.set_touch(1, None)
+    back = sent(board, 200)
+    assert len(back) % 3 == 0 and 15 <= len(back) // 3 <= 25 and back[-3:] == bytes([0xE0, 0x00, 0x40]), back.hex(" ")
+    values = [back[i + 1] | back[i + 2] << 7 for i in range(0, len(back), 3)]
+    assert values == sorted(values, reverse=True), "let go: back to the centre in steps, as stock"
+    board.set_touch(0, 1.0)
+    assert sent(board) == bytes([0xB0, 1, 0x7F]), "mod strip at the top: CC 1"
+    assert board.outputs()["mod2"] == 1545, f"and Mod 2, on stock's scale: {board.outputs()}"
+    board.set_touch(0, None)
+    assert sent(board) == b"", "the mod strip stays where it was left"
+    board.adc[0] = 4095
+    assert sent(board) == bytes([0xB0, 64, 127]), "pedal down: sustain"
+    board.adc[0] = 0
+    assert sent(board) == bytes([0xB0, 64, 0]), "pedal up"
+    board.adc[1] = 3000
+    assert sent(board, 100) == b"", "pressure with no key down sends nothing"
+    board.adc[1] = 0
+    board.run(200)
+    board.press("k7")
+    data = sent(board)
+    out = board.outputs()
+    assert data == bytes([0x90, 60, data[2]]) and out["gate_pin"] == 1 and out["pitch"] == pitch(60), (
+        data.hex(" "),
+        out,
+    )
+    assert out["mod1"] == data[2] * 1545 // 127, f"the keys on track 1's channel play on CV, velocity on Mod 1: {out}"
+    board.adc[1] = 1200
+    assert sent(board) == bytes([0xD0, 63]), "half pressure"
+    board.adc[1] = 4095
+    assert sent(board) == bytes([0xD0, 127]), "full pressure"
+    board.adc[1] = 0
+    assert sent(board) == bytes([0xD0, 0])
+    board.release("k7")
+    board.run(60)
+    assert board.outputs()["gate_pin"] == 0, "gate down with the key"
+    hold(board, "shift", "stop")  # the keys to home channel 9: controls follow, CV does not
+    tap(board, "k12")
+    let_go(board, "stop", "shift")
+    board.set_touch(0, 0.0)
+    assert sent(board) == bytes([0xB8, 1, 0]), "the controls go where the keys go"
+    board.press("k7")
+    board.run(60)
+    assert board.outputs()["gate_pin"] == 0, "keys on another channel leave CV alone"
+    board.release("k7")
+    board.set_touch(0, None)
+    shift_key(board, "stop")  # back to Track
+    board.run(100)
+
+    # recording: four steps, then the mod strip moved during steps 2 and 4 of a live pass
+    def cc1(ms: int) -> list[tuple[int, int]]:
+        """(step, value) of each CC 1 while playing from the top for `ms`."""
+        found, seen = [], 0
+        board.midi_out.clear()
+        tap(board, "play", 40, 0)
+        start = board.us / 1000
+        for _ in range(ms):
+            board.run(1)
+            data = bytes(b for b in board.midi_out if b < 0xF8)
+            for i in range(seen, len(data) - 2, 3):
+                if data[i] == 0xB0 and data[i + 1] == 1:
+                    found.append(
+                        (round((board.us / 1000 - start + 40) / 125), data[i + 2])
+                    )  # Play went down 40 ms before
+            seen = len(data) - len(data) % 3
+        tap(board, "stop")
+        return found
+
+    mk_record_steps(board, ("k7", "k9", "k11", "k12"))
+    shift_key(board, "record")  # overdub, so a note would not clear the track
+    tap(board, "play", 40, 0)
+    tap(board, "record", 40, 0)
+    board.run(500 + 125 + 30 - 80)  # into step 2 of the second pass
+    board.set_touch(0, 1.0)
+    board.run(250)  # step 4
+    board.set_touch(0, 0.5)
+    board.run(100)
+    board.set_touch(0, None)
+    tap(board, "record")
+    tap(board, "stop")
+    assert "*" in all_text(board), "recording a controller marks the pattern unsaved"
+    played_back = cc1(520)
+    assert played_back == [(1, 127), (3, 63)], f"the strip plays back from the steps it was moved in: {played_back}"
+    notes_back = played(board)[:4]
+    assert notes_back == [60, 62, 64, 65], f"the notes are untouched: {notes_back}"
+    hold(board, "seq")
+    tap(board, "encoder")
+    let_go(board, "seq")
+    menu_to(board, "Clear Autom")
+    tap(board, "encoder")
+    tap(board, "encoder")  # All
+    tap(board, "back")
+    assert shows(board, "Autom Cleared"), all_text(board)
+    assert cc1(520) == [], "Clear Autom takes it off the track"
+    shift_key(board, "k31")  # Undo
+    assert cc1(520) == [(1, 127), (3, 63)], "and Undo brings it back"
+    tap(board, "encoder")
+    menu_set(board, "Rec Autom", -1)
+    menu_set(board, "Aft Sensitivity", -2)  # Off
+    tap(board, "back")
+    tap(board, "play", 40, 0)
+    tap(board, "record", 40, 0)
+    board.run(100)
+    board.set_touch(0, 0.25)
+    board.run(100)
+    board.set_touch(0, None)
+    tap(board, "record")
+    tap(board, "stop")
+    assert cc1(520) == [(1, 127), (3, 63)], "Rec Autom Off: the strip plays but is not recorded"
+    board.press("k7")
+    board.adc[1] = 4095
+    assert 0xD0 not in sent(board), "Aft Sensitivity Off"
+    return "strips, pedal, aftertouch, CV from the keys, controller recording, Clear Autom, Rec Autom"
+
+
+def check_mk_mutate() -> str:
+    board = mk2000()
+    tap(board, "mutate")
+    assert shows(board, "Track is empty"), all_text(board)
+    board.run(1300)
+    original = [60, 62, 64, 65, 67, 69, 71, 72]
+    mk_record_steps(board, ("k7", "k9", "k11", "k12", "k14", "k16", "k18", "k19"))
+    assert played(board, 1040)[:8] == original
+    seen = []
+    for _ in range(4):
+        tap(board, "mutate")
+        assert shows(board, "Track Mutated"), all_text(board)
+        variation = played(board, 1040)[:8]
+        assert len(variation) == 8 and variation != original, f"eight steps still, and not the original: {variation}"
+        assert {n % 12 for n in variation} <= {n % 12 for n in original}, f"only the track's notes: {variation}"
+        seen.append(tuple(variation))
+        board.run(37)
+    assert len(set(seen)) >= 3, f"every press is a new variation: {seen}"
+    kept = sum(a == b for v in seen for a, b in zip(v, original, strict=True))
+    assert kept >= 8, f"variations of the original, not of each other: most steps stay ({kept} of 32)"
+    shift_key(board, "mutate")
+    assert shows(board, "Mutate Reset"), all_text(board)
+    assert played(board, 1040)[:8] == original, "Shift + Mutate: the track as it was"
+    tap(board, "play", 40, 0)  # while it plays
+    board.run(300)
+    tap(board, "mutate")
+    board.run(800)
+    tap(board, "stop")
+    assert balanced(bytes(board.midi_out)), "mutating a running track leaves nothing sounding"
+    variation = played(board, 1040)[:8]
+    save_pattern(board)
+    board.run(1300)
+    shift_key(board, "mutate")
+    assert not shows(board, "Mutate Reset") and played(board, 1040)[:8] == variation, (
+        "saved: the variation is the pattern"
+    )
+    return "new variations of the original on every press, reset, while playing, kept by a save"
 
 
 def check_mk_scale() -> str:
@@ -1575,6 +1745,8 @@ CHECKS = {
     "mk2000 step fields": check_mk_step_fields,
     "mk2000 track menu": check_mk_track_menu,
     "mk2000 global menu": check_mk_global_menu,
+    "mk2000 controls": check_mk_controls,
+    "mk2000 mutate": check_mk_mutate,
     "mk2000 scale": check_mk_scale,
     "mk2000 chord": check_mk_chord,
     "mk2000 arp settings": check_mk_arp_settings,
