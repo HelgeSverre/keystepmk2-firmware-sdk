@@ -1,0 +1,18 @@
+{
+    "version_number": "1.0.2.782",
+    "date": "2025_11_13",
+    "vendorid": "0x1C75",
+    "method": "dfu",
+    "images": [
+        {
+            "image_num": 0,
+            "file_name": "ks2_embedded__fw1_0_2_782__2025_11_13_image_552.bin",
+            "productid": "0x228"
+        },
+        {
+            "image_num": 0,
+            "file_name": "ks2_embedded__fw1_0_2_782__2025_11_13_image_552.bin",
+            "productid": "0x229"
+        }
+    ]
+}

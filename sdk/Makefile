@@ -1,0 +1,62 @@
+# KeyStep mk2 SDK. Usage:
+#   make                 build examples/hello
+#   make APP=myapp       build examples/myapp
+#   make sim             run the build in the emulator and print the display
+#   make panel           run it in the KeyStep window
+#   make flash-sim       rehearse flashing it, in the emulator
+#   make fonts           write build/generated/keystep_fonts.h from the stock image (done when needed)
+#   make new APP=myapp   start examples/myapp from examples/hello
+# There is no `make flash` yet: nothing has been flashed to a device (docs/ROADMAP.md).
+APP     ?= hello
+VERSION ?= 1.0.9
+BUILD   := build/$(APP)
+CC      := arm-none-eabi-gcc
+CFLAGS  := -mcpu=cortex-m0plus -mthumb -Os -g -ffreestanding -ffunction-sections -fdata-sections \
+           -Wall -Wextra -Werror -Wno-override-init -Iinclude
+LDFLAGS := -nostdlib -Wl,--gc-sections -Wl,-T,ld/keystep.ld -Wl,-Map,$(BUILD)/$(APP).map
+SRC     := $(wildcard src/*.c) $(wildcard examples/$(APP)/*.c)
+# The stock firmware's fonts, taken from your copy of its image when a firmware includes the header.
+FONTS   := build/generated/keystep_fonts.h
+ifneq ($(shell grep -l keystep_fonts.h examples/$(APP)/*.c examples/$(APP)/*.h 2>/dev/null),)
+NEEDS   := $(FONTS)
+CFLAGS  += -Ibuild/generated
+endif
+MS      ?= 3000
+
+all: $(BUILD)/$(APP).img
+
+$(BUILD)/$(APP).elf: $(SRC) include/*.h src/*.h $(wildcard examples/$(APP)/*.h) ld/keystep.ld $(NEEDS)
+	@mkdir -p $(BUILD)
+	$(CC) $(CFLAGS) $(SRC) $(LDFLAGS) -lgcc -o $@
+	arm-none-eabi-size $@
+
+$(BUILD)/$(APP).bin: $(BUILD)/$(APP).elf
+	arm-none-eabi-objcopy -O binary $< $@
+
+# The 64-byte header the stock images carry, with both XOR sums.
+$(BUILD)/$(APP).img: $(BUILD)/$(APP).bin
+	cd .. && uv run tools/fwpack.py image sdk/$< --version $(VERSION) -o sdk/$@
+
+fonts: $(FONTS)
+$(FONTS): ../tools/fontextract.py
+	cd .. && uv run tools/fontextract.py header -o sdk/$@
+
+sim: $(BUILD)/$(APP).img
+	cd .. && uv run --with unicorn tools/emu.py sdk/$< --ms $(MS) --quiet --flash sdk/$(BUILD)/flash.bin $(if $(SCRIPT),--script "$(SCRIPT)")
+
+panel: $(BUILD)/$(APP).img
+	cd .. && uv run --with unicorn --with pygame-ce tools/panel.py sdk/$< --flash sdk/$(BUILD)/flash.bin
+
+# The update as tools/ksflash.py would do it, in the emulator against a model of the bootloader.
+flash-sim: $(BUILD)/$(APP).img
+	cd .. && uv run --with unicorn tools/ksflash.py sim sdk/$<
+
+new:
+	@test ! -e examples/$(APP) || { echo "examples/$(APP) already exists"; exit 1; }
+	cp -R examples/hello examples/$(APP)
+	@echo "created examples/$(APP); build it with: make APP=$(APP)"
+
+clean:
+	rm -rf build
+
+.PHONY: all fonts sim panel flash-sim new clean

@@ -1,0 +1,12 @@
+[project]
+name = "keystepmk2-firmware-sdk"
+version = "0.1.0"
+description = "Notes and tools for the Arturia KeyStep mk2 firmware"
+requires-python = ">=3.10"
+dependencies = []
+
+[dependency-groups]
+dev = ["ruff"]
+
+[tool.ruff]
+line-length = 120

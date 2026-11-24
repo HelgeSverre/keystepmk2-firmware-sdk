@@ -1,0 +1,161 @@
+{
+  "source": "https://www.arturia.com/products/hybrid-synths/keystep-mk2/resources",
+  "packages": {
+    "1.0.1": {
+      "file": "keystep_mk2__1_0_1.ks2fw",
+      "url": "https://www.arturia.com/api/download/products/keystep-mk2/firmware/keystep_mk2__1_0_1.ks2fw",
+      "released": "2025-11-03",
+      "size": 430215,
+      "sha256": "0be50318eda3c368e5318a5972a47d4a225da4a6652b8e5bdd31caac7a153023",
+      "build": "1.0.1.760",
+      "built": "2025_11_02",
+      "info": {
+        "version_number": "1.0.1.760",
+        "date": "2025_11_02",
+        "vendorid": "0x1C75",
+        "method": "dfu",
+        "images": [
+          {
+            "image_num": 0,
+            "file_name": "ks2_embedded__fw1_0_1_760__2025_11_02_image_552.bin",
+            "productid": "0x228"
+          },
+          {
+            "image_num": 0,
+            "file_name": "ks2_embedded__fw1_0_1_760__2025_11_02_image_552.bin",
+            "productid": "0x229"
+          }
+        ]
+      },
+      "members": [
+        {
+          "name": "info.json",
+          "size": 473,
+          "sha256": "96475c496115e987e12e791d2c5ea358a133f1110785898c886dcf53ab4d8d65"
+        },
+        {
+          "name": "ks2_embedded__fw1_0_1_760__2025_11_02_image_552.bin",
+          "size": 429448,
+          "sha256": "0f8875353b30c8cf03d377d5362cdc7fa06d65240227f6fa7c78ed3a98c6ac17"
+        }
+      ]
+    },
+    "1.0.2": {
+      "file": "keystep_mk2__1_0_2.ks2fw",
+      "url": "https://www.arturia.com/api/download/products/keystep-mk2/firmware/keystep_mk2__1_0_2.ks2fw",
+      "released": "2025-11-14",
+      "size": 430215,
+      "sha256": "2400c42a0b9f78ba7ca44199843ad501e18a06a3bd3679d6ba33ed4b0e38c1c8",
+      "build": "1.0.2.782",
+      "built": "2025_11_13",
+      "info": {
+        "version_number": "1.0.2.782",
+        "date": "2025_11_13",
+        "vendorid": "0x1C75",
+        "method": "dfu",
+        "images": [
+          {
+            "image_num": 0,
+            "file_name": "ks2_embedded__fw1_0_2_782__2025_11_13_image_552.bin",
+            "productid": "0x228"
+          },
+          {
+            "image_num": 0,
+            "file_name": "ks2_embedded__fw1_0_2_782__2025_11_13_image_552.bin",
+            "productid": "0x229"
+          }
+        ]
+      },
+      "members": [
+        {
+          "name": "info.json",
+          "size": 473,
+          "sha256": "e39c8ab938e5efc38b648c05ad53c0d7de49fe4e1d6695a40ffe84b35b496d93"
+        },
+        {
+          "name": "ks2_embedded__fw1_0_2_782__2025_11_13_image_552.bin",
+          "size": 429448,
+          "sha256": "281fe9769e85e5f36db70527162d90b7022e4e35793a2329e01dea291edd6a28"
+        }
+      ]
+    },
+    "1.0.3": {
+      "file": "keystep_mk2__1_0_3.ks2fw",
+      "url": "https://www.arturia.com/api/download/products/keystep-mk2/firmware/keystep_mk2__1_0_3.ks2fw",
+      "released": "2026-02-26",
+      "size": 435043,
+      "sha256": "1d88edecbbc519ef288f62d23f5420824331a5818c5860a29a4fc5a2bcd76736",
+      "build": "1.0.3.799",
+      "built": "2025_11_19",
+      "info": {
+        "version_number": "1.0.3.799",
+        "date": "2025_11_19",
+        "vendorid": "0x1C75",
+        "method": "dfu",
+        "images": [
+          {
+            "image_num": 0,
+            "file_name": "ks2_embedded__fw1_0_3_799__2025_11_19_image_552.bin",
+            "productid": "0x228"
+          },
+          {
+            "image_num": 0,
+            "file_name": "ks2_embedded__fw1_0_3_799__2025_11_19_image_552.bin",
+            "productid": "0x229"
+          }
+        ]
+      },
+      "members": [
+        {
+          "name": "info.json",
+          "size": 473,
+          "sha256": "89139f90446794b5d8d64bd29b64568c0c0c629c39b6502596abe35797585f85"
+        },
+        {
+          "name": "ks2_embedded__fw1_0_3_799__2025_11_19_image_552.bin",
+          "size": 434276,
+          "sha256": "5bf9762b21573a415bb8a705d91a676fea6796ef7c375926e99d29563956405d"
+        }
+      ]
+    },
+    "1.0.4": {
+      "file": "keystep_mk2__1_0_4.ks2fw",
+      "url": "https://www.arturia.com/api/download/products/keystep-mk2/firmware/keystep_mk2__1_0_4.ks2fw",
+      "released": "2026-02-26",
+      "size": 436059,
+      "sha256": "4ae61baad9b0176f3a60684fda556b25e3575888838569497c25de5a72a6fccf",
+      "build": "1.0.4.920",
+      "built": "2026_02_25",
+      "info": {
+        "version_number": "1.0.4.920",
+        "date": "2026_02_25",
+        "vendorid": "0x1C75",
+        "method": "dfu",
+        "images": [
+          {
+            "image_num": 0,
+            "file_name": "ks2_embedded__fw1_0_4_920__2026_02_25_image_552.bin",
+            "productid": "0x228"
+          },
+          {
+            "image_num": 0,
+            "file_name": "ks2_embedded__fw1_0_4_920__2026_02_25_image_552.bin",
+            "productid": "0x229"
+          }
+        ]
+      },
+      "members": [
+        {
+          "name": "info.json",
+          "size": 473,
+          "sha256": "762bc3da04303691675da9a6b17c29ece820bf43e3bbcfc47e9f7d82c51fcd8c"
+        },
+        {
+          "name": "ks2_embedded__fw1_0_4_920__2026_02_25_image_552.bin",
+          "size": 435292,
+          "sha256": "94cfab178902ad149274a469f486f30f901df7ff122ae762698ac6e3a9e42e25"
+        }
+      ]
+    }
+  }
+}

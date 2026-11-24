@@ -1,0 +1,108 @@
+08021ec4	Reset_Handler	sets VTOR, copies .data, clears .bss, runs static constructors, calls main
+08021e50	SystemInit	writes VTOR = 0x08008000
+08021e60	_sbrk	heap grows from 0x2001b0f0, limit 0x20024000 - 0x400
+080197ac	main	HAL/peripheral init, app_init, then app_loop forever
+08019698	SystemClock_Config	HSE + PLL (x16 /2) to 64 MHz, HSI48 on, flash latency 2
+08019764	clear_dual_bank_option	clears the DUAL_BANK option bit at start-up
+0801980c	MX_GPIO_Init	all plain GPIO pins and EXTI lines 2, 3, 6, 15
+08019e54	MX_DMA_Init	DMA1 clock, NVIC for DMA IRQs 9, 10, 11
+08019c30	MX_ADC1_Init	ADC1, channels 0 and 1, 160.5-cycle sampling
+08019ccc	HAL_ADC_MspInit	PA0/PA1 analog, DMA1 channel 1
+08019d68	MX_DAC1_Init	DAC1 channels 1 and 2, unbuffered, self-calibrated
+08019de8	HAL_DAC_MspInit	PA4/PA5 analog
+08019eac	MX_I2C1_Init	I2C1, TIMINGR 0x10303AFF
+08019f20	HAL_I2C_MspInit	PA9/PA10 AF6 open drain
+08019f90	MX_SPI1_Init	SPI1 master, /8, 8 bit (display)
+08019fe0	MX_SPI2_Init	SPI2 master, /4, 8 bit (external flash)
+0801a030	MX_SPI3_Init	SPI3 master receive-only, /64 (button shift register)
+0801a084	HAL_SPI_MspInit	pins for SPI1, SPI2, SPI3
+0801a7a8	MX_USART1_UART_Init	USART1 31250 baud, DMA1 channels 2 (RX) and 3 (TX)
+0801a40c	MX_TIM14_Init	TIM14 ARR 57, never started in observed code
+0801a450	MX_TIM15_Init	TIM15 two-channel 8-bit PWM on PC1/PC2 (pitch CV)
+0801a5b8	MX_TIM17_Init	TIM17 1 MHz free-running microsecond counter
+0801a6ec	MX_TIM16_Init	TIM16 800 kHz PWM on PA6 with DMA (LED data)
+0801a390	MX_TIM7_Init	TIM7 65 us period (keybed scan)
+0801a310	MX_TIM6_Init	TIM6 333 us period
+0801a160	MX_TIM2_Init	TIM2 32-bit, clocked by TIM3 TRGO, four compare interrupts
+0801a284	MX_TIM3_Init	TIM3 tempo prescaler, TRGO on update
+0801aa60	EXTI2_3_IRQHandler	sync-in edges on PA2 and PA3
+0801aab0	USB_IRQHandler	calls HAL_PCD_IRQHandler
+0801aac0	DMA1_Channel1_IRQHandler	ADC DMA
+0801aad0	DMA1_Channel2_3_IRQHandler	USART1 DMA
+0801aad8	DMA1_Ch4_7_IRQHandler	TIM16 (LED) DMA
+0801aae8	TIM2_IRQHandler	four compare events to app callbacks
+0801ab64	TIM3_IRQHandler	tempo tick callback
+0801ab84	TIM6_IRQHandler	333 us callback
+0801aba4	TIM7_IRQHandler	calls keybed_scan_step
+0801abc4	TIM17_IRQHandler	adds 0x10000 to the microsecond high word
+0801aa58	SysTick_Handler	increments the HAL tick
+0801c2b8	HAL_IncTick	
+0801c2d0	HAL_GetTick	
+0801c2dc	HAL_Delay	
+0801c1b4	HAL_NVIC_SetPriority	
+0801c208	HAL_NVIC_EnableIRQ	
+0801ac20	LL_GPIO_Init	struct: Pin, Mode, Speed, OutputType, Pull, Alternate
+0801bd20	HAL_GPIO_Init	struct: Pin, Mode, Pull, Speed, Alternate
+0801bf00	HAL_GPIO_ReadPin	
+0801bf0c	HAL_GPIO_WritePin	
+0801a98c	HAL_DMA_IRQHandler	
+0801ae18	HAL_ADC_Init	
+0801b0f4	HAL_ADC_ConfigChannel	
+0801b43c	HAL_ADC_Start_DMA	
+0801c318	HAL_DAC_Init	
+0801c3e0	HAL_DAC_ConfigChannel	
+0801c51c	HAL_DACEx_SelfCalibrate	
+0801c344	HAL_DAC_Start	
+0801c3ac	HAL_DAC_SetValue	
+0801ca9c	HAL_I2C_Master_Transmit	
+0801cc58	HAL_I2C_Master_Receive	
+0801d0bc	HAL_I2C_Mem_Read	
+0801e774	HAL_SPI_Transmit	
+0801eb70	HAL_SPI_Receive	
+0801f0b8	HAL_TIM_PWM_Start_DMA	
+0802015c	HAL_PCD_IRQHandler	
+080619f8	app_init	board drivers, then application objects
+08061aac	app_loop	runs two cooperative schedulers once each
+0800ade4	board_init	LEDs, display, keybed strap, encoders, touch controller, flash, CV
+080157d0	pin_write	pin id = port*16 + pin, value
+080157f8	pin_read	pin id = port*16 + pin
+0800b964	micros_now	TIM17 counter plus overflow word
+08010f70	oled_init	reset pulse, 28 command bytes, clear frame
+0800fa7c	oled_flush	sends the 512-byte frame buffer
+0800fadc	oled_set_contrast	command 0x81 plus level
+08012e48	keybed_detect_model	PB11 strap: low = 37 keys, high = 32 keys; starts TIM7
+08012ec0	keybed_key_count	returns 0x20 or 0x25
+080130d0	keybed_scan_step	one scan phase per TIM7 interrupt
+08012ecc	keybed_key_update	two-contact state machine, velocity from microsecond delta
+080135b4	buttons_scan	latch PB4, read 16 bits over SPI3, debounce
+0800a310	encoder_poll_selected	drives the select pin low, reads A/B, restores it
+08008ee4	encoder_poll	A/B read without a select pin
+08008e40	digital_input_poll	debounced single pin (PA15)
+080093c4	touch_int_poll	latches EXTI line 6 falling flag (PC6)
+080093e0	touch_read_report	reads 4 bytes from I2C address 0x15 when flagged
+080145fc	leds_init	select pins high, DMA callbacks, both strips blanked
+0801441c	leds_encode_and_send	GRB bits to PWM compare values, starts DMA
+080143f4	leds_select_strip	PB0 (strip 0) or PA7 (strip 1)
+08018574	extflash_init	reset, JEDEC id check, littlefs mount
+08017f08	extflash_read	command 0x03
+0801788c	extflash_program	0x06, 0x02, poll 0x05
+080188a0	extflash_erase_4k	0x06, 0x20, poll 0x05
+08018194	lfs_read_cb	block + 0x60, 4 KiB blocks
+08018bbc	lfs_erase_cb	
+08015c4c	cv_init	message handlers, TIM15 PWM, DAC, calibration points
+08015e50	cv_pitch_set	pitch to 16-bit value, low byte to CCR1, high byte to CCR2
+08016068	cv_mod_set	calibrated value to DAC, left-aligned 12 bit
+0801620c	cv_gate_set	PC9, polarity from gate format
+080161b4	cv_gate_format_set	PB1 and PC8
+08016238	cv_pitch_pwm_start	enables TIM15 CH1/CH2
+08016268	cv_mod_dac_start	
+080162a0	sync_out2_set	PC3, inverted
+080162b4	sync_out1_set	PC0, inverted
+080162c8	sync_out2_get	
+080162d8	sync_out1_get	
+080162e8	sync_in2_get	PA2, inverted
+080162f8	sync_in1_get	PA3, inverted
+0801630c	sync_loopback_test	PC3 to PA2 and PC0 to PA3
+08018db4	tempo_set	TIM3 ARR from tempo
+08018cf4	tim2_get_ccr1	
+0800e5f0	midi_uart_dma_irq	
