@@ -27,10 +27,13 @@ HEADER_SIZE = 64
 MAGIC = 0x0010
 VENDOR_ID = 0x1C75
 PRODUCT_ID = 0x0228
-PRODUCT_IDS = (0x0228, 0x0229)  # KeyStep mk2, KeyStep 37 mk2: both take the same image
+PRODUCT_IDS = (0x0228, 0x0229)  # the USB ids of the KeyStep mk2 and the KeyStep 37 mk2: both take the same image
 LOAD_ADDRESS = 0x08008000
 RAM_START, RAM_END = 0x20000000, 0x20024000
-FLASH_END = 0x08080000  # 512 KiB part assumed; no stock image comes near it
+FLASH_END = 0x08080000  # the end of the 512 KiB flash
+# The bootloader keeps its "valid image" mark in the last page and erases that page before the
+# image's own pages (docs/BOOTLOADER.md, "The bootloader, read"), so an image must end before it.
+IMAGE_END = 0x0807F800
 
 
 def xor8(data: bytes) -> int:
@@ -87,14 +90,16 @@ def check(image: bytes) -> list[str]:
     h, body, problems = Header.parse(image), image[HEADER_SIZE:], []
     if h.magic != MAGIC:
         problems.append(f"magic is {h.magic:04X}, expected {MAGIC:04X}")
-    if h.vendor != VENDOR_ID or h.product not in PRODUCT_IDS:
+    if h.vendor != VENDOR_ID or h.product != PRODUCT_ID:  # the bootloader wants 0228 on both models
         problems.append(f"USB id is {h.vendor:04X}:{h.product:04X}")
     if h.load != LOAD_ADDRESS:
         problems.append(f"load address is {h.load:08X}")
     if h.size != len(body) or h.end != h.load + len(body):
         problems.append(f"size {h.size:#x} / end {h.end:08X} do not match a {len(body):#x}-byte body")
-    if h.end > FLASH_END:
-        problems.append("image runs past the end of flash")
+    if h.end > IMAGE_END:
+        problems.append(
+            f"image ends at {h.end:08X}, past {IMAGE_END:08X}: it would reach the page of the bootloader's mark"
+        )
     if h.body_xor != xor8(body):
         problems.append(f"body XOR is {h.body_xor:02X}, computed {xor8(body):02X}")
     if h.header_xor != xor8(image[:63]):
@@ -184,7 +189,7 @@ def cmd_package(args: argparse.Namespace) -> int:
 
 def cmd_selftest(_args: argparse.Namespace) -> int:
     failed = 0
-    for path in sorted((ROOT / "firmware").glob("*/*.bin")):
+    for path in sorted((ROOT / "firmware").glob("[0-9]*/*.bin")):  # the versions, not firmware/device
         image = path.read_bytes()
         h = Header.parse(image)
         rebuilt = build_header(image[HEADER_SIZE:], h.major, h.patch) + image[HEADER_SIZE:]
