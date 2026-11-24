@@ -145,7 +145,9 @@ def read_back(device: Device, length: int, say=print) -> bytes:
     return bytes(data[:length])
 
 
-def flash(transport, image: bytes, image_num: int = 0, say=print, skip_image_checks: bool = False) -> Device:
+def flash(
+    transport, image: bytes, image_num: int = 0, say=print, skip_image_checks: bool = False, verify: bool = False
+) -> Device:
     """The whole update. Returns the device as it comes back afterwards.
 
     `skip_image_checks` exists for the self-test, to see what the device model does with a bad
@@ -189,6 +191,16 @@ def flash(transport, image: bytes, image_num: int = 0, say=print, skip_image_che
         number += 1
     device.control(0x21, DNLOAD, number & 0xFFFF, 0, b"")
     settle(device, "the end of the download")
+
+    if verify:  # before the application starts: a wrong flash is then still in update mode
+        status, state = get_status(device)
+        if state != DFU_IDLE:
+            say(f"not verified: the bootloader is in state {state} after the download, not idle")
+        else:
+            body = image[fwpack.HEADER_SIZE :]
+            if read_back(device, len(body), say) != body:
+                raise Refused("the flash does not hold the image that was sent. The unit is still in update mode.")
+            say("verified: the flash holds the image")
 
     say("leaving update mode (request 0xF3)")
     device.control(0x21, LEAVE, 0, 0, b"")
@@ -439,6 +451,13 @@ def cmd_selftest(_args) -> int:
     expect("stock -> SDK hello", t.app_image == hello and not device.update_mode)
     device = flash(t, stock, say=quiet)
     expect("SDK hello -> stock (through the SDK's own 0xF2)", t.app_image == stock and device.name == "KeyStep mk2")
+    said: list[str] = []
+    device = flash(t, hello, say=said.append, verify=True)
+    expect(
+        "stock -> SDK hello, read back before leaving",
+        t.app_image == hello and "verified: the flash holds the image" in said,
+    )
+    device = flash(t, stock, say=quiet, verify=True)
 
     bad = bytearray(hello)
     bad[200] ^= 1
@@ -568,7 +587,7 @@ def cmd_flash(args) -> int:
     print(f"This writes {args.image.name} to the connected KeyStep. Type FLASH to go on: ", end="", flush=True)
     if sys.stdin.readline().strip() != "FLASH":
         sys.exit("stopped")
-    flash(UsbTransport(), image, number)
+    flash(UsbTransport(), image, number, verify=not args.no_verify)
     return 0
 
 
@@ -591,6 +610,7 @@ def main() -> int:
     p = sub.add_parser("flash", help="flash a real device")
     p.add_argument("image", type=Path)
     p.add_argument("--real", action="store_true")
+    p.add_argument("--no-verify", action="store_true", help="do not read the flash back before leaving update mode")
     args = parser.parse_args()
     try:
         commands = {

@@ -203,3 +203,19 @@ firmware/keystep_mk2__1_0_2.ks2fw --real`.
 - While the device changes identity, its string descriptors cannot be read for a moment
   (pyusb: "The device has no langid").
 
+### The one-byte test: no signature
+
+Same unit, 2026-11-25. Stock 1.0.2 with one byte changed (`Bank: ` to `Bonk: ` at `0x0806D251`)
+and the header rebuilt by `tools/fwpack.py image`: three bytes differ from the stock image, the
+letter and the two sums (header offsets `0x18` and `0x3F`).
+
+`ksflash.py flash` from the running application (`0xF2`, then the update): accepted, the unit
+restarted into the application, and its home screen reads `Bonk: 1 | Preset: 1`.
+
+So the bootloader takes an image that Arturia did not make. Whatever it checks, it is nothing
+beyond what `tools/fwpack.py` rebuilds: there is no signature.
+
+Stock 1.0.2 was flashed back straight afterwards with `ksflash.py flash`, which now reads the
+flash back before it sends `0xF3`: after the last block the bootloader is in dfuIDLE, the upload
+returned the image byte for byte, and `0xF3` after those uploads still started the application.
+
