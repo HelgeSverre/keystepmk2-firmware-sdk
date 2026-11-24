@@ -3,8 +3,11 @@
 Goal: flash our own firmware safely, with an SDK, a toolchain and an emulator, and a multi-track
 MIDI sequencer as the demonstration. The method follows `../reverse-engineering/jt4000`.
 
-Status as of 2026-11-23. Nothing has been flashed. The only device traffic so far is read-only
-SysEx (see [SYSEX.md](SYSEX.md)).
+Status as of 2026-11-24. Phases 3 and the first half of 4 are done on one unit: update mode
+entered with Tempo, the flash read back through DFU upload, and stock 1.0.2 flashed through MIDI
+Control Center from update mode and verified by reading it back ([BOOTLOADER.md](BOOTLOADER.md),
+"Seen on a device"). Nothing of ours has been flashed. Next: stock 1.0.2 with `tools/ksflash.py`,
+then the one-byte test.
 
 ## The gating question
 
@@ -16,13 +19,13 @@ Flashing is safe once two things are known:
 
 | Question | Answer so far | Evidence |
 |----------|---------------|----------|
-| Recovery entry | Hold Tempo while switching on | Arturia's support article; not tried here |
+| Recovery entry | Hold Tempo while switching on | Done on a unit, three times; MIDI Control Center flashes a unit entered this way |
 | Entry from the application | USB class request `0xF2`, then a RAM marker and a reset | Application code ([BOOTLOADER.md](BOOTLOADER.md)) |
 | Image integrity | Two XOR sums in a 64-byte header, no encryption | All four stock images; `tools/fwpack.py selftest` rebuilds each header byte for byte |
 | Signature | None visible in the image or header | The bootloader could still hold a check that is not visible from outside |
 | Update protocol | USB DFU blocks plus Arturia requests `0xF2` (enter), `0xF4` (select image), `0xF3` (leave) | MCC's code ([UPDATER.md](UPDATER.md)); not yet seen on the wire |
 | Host-side checks | None on the image: MCC only matches the package's product id | [UPDATER.md](UPDATER.md) |
-| Bootloader contents | Unknown | Not in the package |
+| Bootloader contents | Unknown | Not in the package. DFU upload reads from `0x08008000` up; reaching below it would take a set-address command in a download block, where this bootloader expects an image, so it has not been sent |
 
 ## Phases
 

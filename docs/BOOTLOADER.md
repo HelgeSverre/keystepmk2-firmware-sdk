@@ -163,3 +163,24 @@ Requests sent in update mode on the same unit: `DFU_GETSTATE`, `DFU_GETSTATUS`, 
   (I); what the 10 counts is not known.
 - The image's header was not found anywhere in the range read.
 
+### An update through MIDI Control Center, started from update mode
+
+Same unit, same day. Entered with Tempo held, MIDI Control Center 1.x as installed (its offer to
+update itself to 1.23.1.152 declined), package `keystep_mk2__1_0_2.ks2fw` chosen by hand.
+
+- On start it showed `Error: Failed to open the device.`, then listed the unit as **KeyStep mk2**
+  with `Firmware Revision: 0.2.0` and `Update Available (1.0.4)`, and offered to install 1.0.4
+  (declined). The noise serial did not stop it. `0.2.0` is the bootloader's USB device version,
+  `bcdDevice` `0x0200`, shown as a firmware revision.
+- The update ran and ended with `The burn process completed successfully.` The unit restarted
+  into the application by itself, with its own serial again.
+- Read back afterwards (Tempo held again): all 491,520 bytes from `0x08008000` are identical to
+  the read before the update, the image identical to stock 1.0.2, and the last eight bytes still
+  `DE C0 0D 60 0A 00 00 00`. So the 10 is not a count of updates.
+
+This is the recovery path, proven once: no working application is needed to enter update mode,
+and Arturia's tool flashes a unit found that way.
+
+`tools/ksflash.py verify IMAGE` and `read OUT` do the read-back (uploads from block 2, status and
+abort only); `verify` confirmed the unit against the 1.0.2 package.
+

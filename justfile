@@ -97,6 +97,11 @@ _image app:
 probe:
     {{ uv }} run --with pyusb tools/ksflash.py probe
 
+# Update mode (Tempo held at power-on): compare the unit's flash with an image. Reads only
+[group('device')]
+verify file=("firmware/keystep_mk2__" + replace(version, ".", "_") + ".ks2fw"):
+    {{ uv }} run --with pyusb tools/ksflash.py verify {{ file }}
+
 # Receive a flash dump from the flashdump firmware over MIDI
 [group('device')]
 dump-receive out="flash.bin" *args:
