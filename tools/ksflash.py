@@ -162,9 +162,9 @@ def flash(
     say(f"found {device.describe()}")
     check_identity(device)
     serial = device.serial
-    # After Tempo at power-on the bootloader's serial is noise (docs/BOOTLOADER.md), so the
-    # application that comes back cannot be matched by it.
-    back_as = None if device.update_mode else serial
+    # The application that comes back cannot be matched by serial: after Tempo at power-on the
+    # bootloader's serial is noise (docs/BOOTLOADER.md), and an SDK firmware has a serial of its own.
+    back_as = None
 
     if not device.update_mode:
         say("asking the application for update mode (request 0xF2)")
@@ -193,7 +193,7 @@ def flash(
     settle(device, "the end of the download")
 
     if verify:  # before the application starts: a wrong flash is then still in update mode
-        status, state = get_status(device)
+        _status, state = get_status(device)
         if state != DFU_IDLE:
             say(f"not verified: the bootloader is in state {state} after the download, not idle")
         else:

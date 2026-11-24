@@ -219,3 +219,16 @@ Stock 1.0.2 was flashed back straight afterwards with `ksflash.py flash`, which 
 flash back before it sends `0xF3`: after the last block the bootloader is in dfuIDLE, the upload
 returned the image byte for byte, and `0xF3` after those uploads still started the application.
 
+### SDK firmware on the unit
+
+2026-11-25: `sdk/examples/flashdump` was flashed, read back and started. First SDK code on a
+unit.
+
+- It enumerates as `1C75:0228 KeyStep mk2` with the SDK's placeholder serial `0123456789ABCDEF`,
+  the same three interfaces as the stock application, and macOS lists a MIDI port `KeyStep mk2`.
+- Play sent the external flash over USB MIDI; `tools/flashdump.py receive` reassembled 524,288
+  bytes with every block's CRC-16 and the whole chip's CRC-32 right. Chip id `C8 40 13`.
+- The copy: all 64 pattern sectors in use, the settings sector, five of the 32 file-system
+  sectors, and **nothing in `0x41000`-`0x5FFFF`**: the area the SDK keeps to is untouched by the
+  stock firmware on this unit, as read from its code.
+
