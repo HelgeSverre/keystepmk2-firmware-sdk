@@ -380,13 +380,26 @@ Calibration file `calib/expr_pdl`.
   |---|---|---|
   | 0x00000–0x3FFFF | `presets/N`, N = 0–63 | One pattern per 4 KiB block `N`; a write at offset 0 erases the block first. The block is the 4096-byte pattern blob of a `.keystep2` file, with N = (bank − 1) × 16 + (pattern − 1) (V in emulation: five patterns loaded into the flash image read back identical over SysEx) |
   | 0x40000–0x40FFF | `settings` | Global settings; 0x68 bytes are read at start-up (V in emulation). Layout below |
-  | 0x41000–0x5FFFF | none | No name maps to blocks 0x41–0x5F: 124 KiB the stock firmware never addresses. The SDK stores its data here. Not read on a device, so presumably blank (I) |
+  | 0x41000–0x5FFFF | none | No name maps to blocks 0x41–0x5F: 124 KiB the stock firmware never addresses. The SDK stores its data here. Blank on the one unit read (2026-11-25). See "The SDK's area across versions" below |
 
   Every other name goes to littlefs (`calib/aft_factory`, `calib/aft_user`, `calib/pitch`,
   `calib/mod1`, `calib/mod2`, `calib/expr_pdl`). The factory calibration therefore lives in
   0x60000–0x7FFFF and cannot be rebuilt from the firmware package.
 - On a blank chip the firmware formats the file system at the first start and creates a `calib`
   directory and a `boot_count` file: three sectors from 0x60000 are written (V in emulation).
+- **The SDK's area across versions** (checked 2026-11-25):
+  - 1.0.4: the eleven functions of the file layer and flash driver (name to block
+    [0x08018484], raw read, write and delete, the littlefs block read and program, the driver)
+    are identical to 1.0.2's after normalising addresses, 0x4C higher up (V). The stored names
+    are the same in 1.0.2, 1.0.3 and 1.0.4: `presets/`, `settings`, `calib/…`, `boot_count`.
+  - 1.0.2, 1.0.3 and 1.0.4 run in the emulator on a unit's own chip image, with every sector
+    read, programmed or erased logged: start-up reads 0x00, 0x40 and file-system sectors and
+    programs 0x60; saving a pattern erases and programs its sector; saving the settings erases
+    and programs 0x40; nothing in 0x41–0x5F is touched by any of the three (V in emulation).
+  - `All Patterns Init` (answered Yes) erases sectors 0x00–0x3F and nothing else, in 1.0.2 and
+    1.0.4 (V in emulation). 1.0.3 was not run through it.
+  - Flashing a firmware does not touch this chip: the external flash read on a unit after
+    several updates still held its patterns and settings.
 - **Settings block** (V in emulation: written after SysEx operation `19 92`, then compared with
   the values the read operation `2A 89` returns). 104 bytes:
 
