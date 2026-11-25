@@ -2,7 +2,8 @@
 
 Reverse-engineering notes and tools for the firmware of the Arturia KeyStep mk2, working towards
 custom firmware with an SDK and an emulator ([ROADMAP](docs/ROADMAP.md)). The stock firmware is
-mapped and boots in the emulator. Nothing has been flashed.
+mapped and boots in the emulator. On one unit the bootloader has been read out, stock and modified
+images flashed and verified, and SDK firmware run ([FLASHING](docs/FLASHING.md)).
 
 Unofficial. Not affiliated with or endorsed by Arturia.
 
@@ -15,7 +16,8 @@ Unofficial. Not affiliated with or endorsed by Arturia.
 | `docs/SYSEX.md` | The SysEx dispatcher: all 14 operations and the parameter id layout |
 | `docs/VERSIONS.md` | What differs between the published versions |
 | `docs/HARDWARE.md` | Clock, pin table, buses, display, LEDs, keybed, CV, external flash |
-| `docs/BOOTLOADER.md` | Update mode: how it is entered and what is still unknown |
+| `docs/FLASHING.md` | How to flash a unit, check it and get back to stock; what never to send |
+| `docs/BOOTLOADER.md` | Update mode and the bootloader: what a unit did, and the bootloader's code read |
 | `docs/UPDATER.md` | How MIDI Control Center installs firmware (USB DFU with Arturia requests) |
 | `firmware/` | The four published packages, unpacked, with hashes in `listing.json` |
 | `tools/fwfetch.py` | Downloads and unpacks the packages |
@@ -71,7 +73,8 @@ just analyze 1.0.4    # decompile one (needs Ghidra and a JDK)
   same 4096 bytes as a pattern in a `.keystep2` file.
 - The SDK builds firmware with drivers for every mapped part including USB MIDI, CV, gate and
   sync, and a four-track sequencer runs on it. It can draw with the stock fonts, read from your
-  copy of the image. In the emulator only.
+  copy of the image. `flashdump`, `bootdump` and MK2000 have been flashed to a unit; how MK2000
+  behaves there is not yet written up.
 - 1.0.1 and 1.0.2 contain identical code. 1.0.4 keeps the same SysEx operations and pattern
   parameter layout as 1.0.2 and adds global settings.
 
@@ -82,5 +85,7 @@ just analyze 1.0.4    # decompile one (needs Ghidra and a JDK)
 
 ## Caution
 
-Flashing a modified image has not been attempted. Until the bootloader's checks and a recovery
-path are understood, treat any write to the device's firmware as able to brick it.
+Flashing has been done on one 32-key unit, with a recovery path proven there
+([FLASHING](docs/FLASHING.md)). Other units, the 37-key model and other bootloader revisions are
+untried: read that file first, take the copy of the external flash it describes, and keep to the
+"never send" list.

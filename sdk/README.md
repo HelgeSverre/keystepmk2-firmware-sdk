@@ -3,10 +3,11 @@
 Build firmware for the Arturia KeyStep mk2 in C and run it in the emulator and the KeyStep
 window.
 
-**Status: emulator only.** Nothing built here has been flashed to a device, and there is no
-`make flash`. The drivers follow what the stock firmware does ([HARDWARE.md](../docs/HARDWARE.md)),
-but they have only met the emulator's model of the board, not the board. See
-[ROADMAP.md](../docs/ROADMAP.md) for what has to be known before flashing.
+**Status: runs on a unit, barely tried there.** `flashdump`, `bootdump` and `mk2000` have been
+flashed to one 32-key unit with `just flash` ([FLASHING.md](../docs/FLASHING.md)). Shown to work on
+it: start-up, clock, USB enumeration and USB MIDI out, the external flash driver (reads), the Play
+button, and the update request. Everything else has only met the emulator's model of the board;
+the drivers follow what the stock firmware does ([HARDWARE.md](../docs/HARDWARE.md)).
 
 ![The hello example in the panel](../docs/panel-hello.png)
 
@@ -43,6 +44,7 @@ warnings.
 | `examples/screens` | The MK2000 screens as still pictures in the stock fonts; turn the encoder. |
 | `examples/seq4` | The first sketch of a four-track step sequencer: 16 steps, four notes per step, step and live recording, saved with Shift + Seq. Everything is on the display; the lights above the keys repeat it on the 37-key model. |
 | `examples/flashdump` | Sends the whole external flash out as SysEx (USB if connected, else DIN) for `tools/flashdump.py`: the backup of a unit's patterns, settings and calibration. Reads only. |
+| `examples/bootdump` | `flashdump` reading the processor's first 32 KiB instead: the bootloader, which is in no package. Reads only. |
 | `examples/cv` | The keyboard as a CV source: pitch and gate from the keys, Mod 1 from the strip, Mod 2 from aftertouch, a clock on the sync output, and the inputs on the display. |
 | `examples/fonts` | Text in the stock firmware's two fonts (see Fonts below). |
 | `examples/flashtest` | Checks the external flash driver: chip id, the write guard, and a write and read-back in the last sector of the SDK's area. |
@@ -75,7 +77,7 @@ warnings.
 | `ks_aftertouch()`, `ks_pedal()` | the two analog inputs, 0 to 4095 |
 | `ks_store_save(slot, data, len)`, `ks_store_load(slot, data, max)` | 31 numbered records of up to 4088 bytes in the external flash, with a checksum |
 | `ks_flash_id()`, `ks_flash_read()`, `ks_flash_erase()`, `ks_flash_write()` | the external flash directly; erase and write only work in the SDK's area (below) |
-| `ks_reset()`, `ks_enter_update_mode()` | system reset; the update-mode request, untested |
+| `ks_reset()`, `ks_enter_update_mode()` | system reset; the update-mode request (used on a unit by `ksflash.py`'s `0xF2`) |
 
 ## Fonts
 

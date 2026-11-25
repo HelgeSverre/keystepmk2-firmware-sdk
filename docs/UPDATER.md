@@ -4,6 +4,13 @@ Static analysis only, 2026-11-23. MCC was not launched and nothing was sent to a
 Arturia's servers. Claims are marked **verified** (read from the binary or from files on disk) or
 **inferred** (a conclusion drawn from verified facts, not seen directly).
 
+Since this was written the update has been run on a unit, with MIDI Control Center and with
+`tools/ksflash.py` sending the sequence below, and the bootloader has been read: see
+[BOOTLOADER.md](BOOTLOADER.md), "Seen on a device" and "The bootloader, read". What MIDI Control
+Center showed there: a unit entered with Tempo is listed as KeyStep mk2 despite its noise serial,
+its `Firmware Revision` field shows the bootloader's `bcdDevice` (`0x0200` as `0.2.0`), and it
+offers the latest version but takes a package chosen by hand.
+
 | | |
 |---|---|
 | Binary | `/Applications/Arturia/MIDI Control Center.app/Contents/MacOS/MIDI Control Center` |

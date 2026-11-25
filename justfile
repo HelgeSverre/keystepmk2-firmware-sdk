@@ -97,7 +97,17 @@ _image app:
 probe:
     {{ uv }} run --with pyusb tools/ksflash.py probe
 
-# Update mode (Tempo held at power-on): compare the unit's flash with an image. Reads only
+# Flash an SDK app to the connected unit: asks for update mode, sends, reads back, starts it
+[group('device')]
+flash app="hello": (build app)
+    {{ uv }} run --with pyusb tools/ksflash.py flash sdk/build/{{ app }}/{{ app }}.img --real
+
+# Flash a stock package back
+[group('device')]
+flash-stock file=("firmware/keystep_mk2__" + replace(version, ".", "_") + ".ks2fw"):
+    {{ uv }} run --with pyusb tools/ksflash.py flash {{ file }} --real
+
+# Compare the unit's flash with an image. Reads only; a running firmware is left in update mode
 [group('device')]
 verify file=("firmware/keystep_mk2__" + replace(version, ".", "_") + ".ks2fw"):
     {{ uv }} run --with pyusb tools/ksflash.py verify {{ file }}

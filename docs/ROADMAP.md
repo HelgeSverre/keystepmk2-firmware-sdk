@@ -7,8 +7,9 @@ Status as of 2026-11-24. Phases 3 and 4 are done on one unit: update mode entere
 the flash read back through DFU upload, and stock 1.0.2 flashed from update mode first through
 MIDI Control Center and then with `tools/ksflash.py`, each verified by reading the flash back
 ([BOOTLOADER.md](BOOTLOADER.md), "Seen on a device"). Phase 5, on 2026-11-25: a stock image with one
-byte changed ran, so there is no signature. Next: an SDK firmware on the unit, starting with
-`flashdump` to keep a copy of the unit's external flash.
+byte changed ran, so there is no signature. The same day `flashdump` copied the unit's
+external flash, `bootdump` read the bootloader (phase 6), and MK2000 was flashed and started.
+Next: go through MK2000 on the unit, driver by driver.
 
 ## The gating question
 
@@ -24,9 +25,9 @@ Flashing is safe once two things are known:
 | Entry from the application | USB class request `0xF2`, then a RAM marker and a reset | Application code ([BOOTLOADER.md](BOOTLOADER.md)) |
 | Image integrity | Two XOR sums in a 64-byte header, no encryption | All four stock images; `tools/fwpack.py selftest` rebuilds each header byte for byte |
 | Signature | None | A stock image with one byte changed and the sums rebuilt was flashed and ran (2026-11-25) |
-| Update protocol | USB DFU blocks plus Arturia requests `0xF2` (enter), `0xF4` (select image), `0xF3` (leave) | MCC's code ([UPDATER.md](UPDATER.md)); not yet seen on the wire |
+| Update protocol | USB DFU blocks plus Arturia requests `0xF2` (enter), `0xF4` (select image), `0xF3` (leave) | MCC's code ([UPDATER.md](UPDATER.md)); `tools/ksflash.py` sends that sequence and a unit took it |
 | Host-side checks | None on the image: MCC only matches the package's product id | [UPDATER.md](UPDATER.md) |
-| Bootloader contents | Unknown | Not in the package. DFU upload reads from `0x08008000` up; reaching below it would take a set-address command in a download block, where this bootloader expects an image, so it has not been sent |
+| Bootloader contents | Read out and disassembled | `sdk/examples/bootdump` on a unit, 2026-11-25 ([BOOTLOADER.md](BOOTLOADER.md), "The bootloader, read") |
 
 ## Phases
 
@@ -58,9 +59,10 @@ Flashing is safe once two things are known:
    flashed SDK firmware can be replaced without the Tempo button), the SysEx version reply, CV,
    gate, sync, aftertouch and pedal as raw values, and optional use of the stock fonts
    (`tools/fontextract.py`). Missing: calibrated CV, the 37-key model.
-   Tools around it: `tools/ksflash.py` (the update, rehearsed in the emulator against a model of
-   the bootloader; the real-device path is untested) and `sdk/examples/flashdump` with
-   `tools/flashdump.py` (a read-only copy of the external flash over MIDI).
+   Tools around it: `tools/ksflash.py` (flash, read back, verify; used on a unit, see
+   [FLASHING.md](FLASHING.md)), `sdk/examples/flashdump` with `tools/flashdump.py` (a read-only
+   copy of the external flash over MIDI) and `sdk/examples/bootdump` (the same for the
+   bootloader). All three have run on a unit.
 9. **Demonstration: multi-track MIDI sequencer.** `sdk/examples/mk2000`, KeyStep MK2000
    ([MK2000.md](MK2000.md)): four tracks, per-step ratchet, probability and conditions, channel
    changes on the numbered keys, arpeggiator, chains, power-cut-safe storage. Runs in the emulator

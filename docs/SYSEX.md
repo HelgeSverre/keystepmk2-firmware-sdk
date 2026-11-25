@@ -116,6 +116,11 @@ back as `0x7FFF`. The ids are the `globalParamId` values in MIDI Control Center'
 `/Library/Arturia/MIDI Control Center/Resources/KeyStep2.json`, which also lists each setting's
 values and default. Tried in the emulator only.
 
+The value of a setting that has a list of choices is its index scaled to `0x7FFF`: index × 32767 /
+(choices − 1), written as a CBOR integer. So a two-way switch is `0` or `0x7FFF`, and Mod Max Volt
+`5V` (index 4 of 10) is `0x38E3`. A small number such as 1 is read as the first choice (V in
+emulation, from the CV settings in [STOCK-UI.md](STOCK-UI.md)).
+
 Group 3 is the only limit that differs between the versions: 1.0.4 has twelve more global
 settings there.
 

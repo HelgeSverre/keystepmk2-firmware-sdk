@@ -10,6 +10,13 @@ normalising addresses and generated names (`ghidra/scripts/verdiff.py`).
 
 1.0.3 has not been decompiled; its strings are compared below.
 
+Arturia's resources page lists the packages without release notes (looked at on 2026-11-25), so
+what a version adds is read from the images here.
+
+Where things are stored on the external flash did not change from 1.0.2 to 1.0.4: the same names,
+the same blocks, identical storage code in 1.0.4, and the same sectors touched by all three in
+the emulator ([HARDWARE.md](HARDWARE.md), "The SDK's area across versions").
+
 ## 1.0.2 to 1.0.4
 
 - **Functions:** 2570 in 1.0.2, 2583 in 1.0.4. 187 runs of functions differ, 12 were added and 12
