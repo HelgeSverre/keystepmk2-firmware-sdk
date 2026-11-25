@@ -18,6 +18,7 @@ Unofficial. Not affiliated with or endorsed by Arturia.
 | `docs/HARDWARE.md` | Clock, pin table, buses, display, LEDs, keybed, CV, external flash |
 | `docs/user-guide.html`, `docs/USER-GUIDE.md` | The MK2000 user guide: a designed, standalone page, and the same facts as plain text |
 | `docs/MK2000.md` | The MK2000 design: what the code is built to |
+| `docs/SELFTEST.md` | The self-test firmware: what it checks on a unit and how to read its report |
 | `docs/FLASHING.md` | How to flash a unit, check it and get back to stock; what never to send |
 | `docs/BOOTLOADER.md` | Update mode and the bootloader: what a unit did, and the bootloader's code read |
 | `docs/UPDATER.md` | How MIDI Control Center installs firmware (USB DFU with Arturia requests) |

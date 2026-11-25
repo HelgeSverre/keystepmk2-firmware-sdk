@@ -112,6 +112,11 @@ flash-stock file=("firmware/keystep_mk2__" + replace(version, ".", "_") + ".ks2f
 verify file=("firmware/keystep_mk2__" + replace(version, ".", "_") + ".ks2fw"):
     {{ uv }} run --with pyusb tools/ksflash.py verify {{ file }}
 
+# Listen for the self-test's report (flash it first: just flash selftest). Reads only
+[group('device')]
+selftest-receive *args:
+    {{ uv }} run --with mido --with python-rtmidi tools/selftest.py receive --port "KeyStep mk2" {{ args }}
+
 # Receive a flash dump from the flashdump firmware over MIDI
 [group('device')]
 dump-receive out="flash.bin" *args:
@@ -152,6 +157,7 @@ build-all:
 test *args: build-all
     make -s -C sdk/examples/mk2000/tests
     {{ uv }} run --with unicorn tools/emutest.py {{ args }}
+    {{ uv }} run --with unicorn tools/selftest_emu.py
 
 # Rebuild every stock header and compare
 [group('qa')]

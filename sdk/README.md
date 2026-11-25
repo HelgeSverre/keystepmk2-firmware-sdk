@@ -42,6 +42,7 @@ warnings.
 | `examples/hello` | Shows every control, plays the keys as MIDI notes. The template for `make new`. |
 | `examples/mk2000` | **KeyStep MK2000**, the full firmware: four tracks with ratchets, probability and conditions per step, channels changed with a held button and a numbered key, an arpeggiator, scales and chords, pattern chains, saved to flash. Design in [MK2000.md](../docs/MK2000.md); its engine, store, arpeggiator, clock and harmony have host tests in `examples/mk2000/tests`. |
 | `examples/flashdump` | Sends the whole external flash out as SysEx (USB if connected, else DIN) for `tools/flashdump.py`: the backup of a unit's patterns, settings and calibration. Reads only. |
+| `examples/selftest` | Tests the unit and the SDK's drivers on it: timing, flash, sync, the display, every light, button and key, the encoder, strips and aftertouch, with OK or FAIL on the display and a full report to the computer ([SELFTEST.md](../docs/SELFTEST.md)). |
 | `examples/bootdump` | `flashdump` reading the processor's first 32 KiB instead: the bootloader, which is in no package. Reads only. |
 | `examples/cv` | The keyboard as a CV source: pitch and gate from the keys, Mod 1 from the strip, Mod 2 from aftertouch, a clock on the sync output, and the inputs on the display. |
 | `examples/fonts` | Text in the stock firmware's two fonts (see Fonts below). |

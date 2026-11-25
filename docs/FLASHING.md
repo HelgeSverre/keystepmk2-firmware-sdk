@@ -25,6 +25,7 @@ just build mk2000                 # build an SDK app
 just flash mk2000                 # flash it: asks for update mode, sends, reads back, starts it
 just flash-stock                  # stock 1.0.2 from firmware/, the same way
 just verify                       # compare the unit's flash with stock 1.0.2 (reads only)
+just flash selftest               # the self-test: then `just selftest-receive` and follow the display
 ```
 
 `flash` refuses an image that fails `tools/fwpack.py`'s checks, asks you to type `FLASH`, and
