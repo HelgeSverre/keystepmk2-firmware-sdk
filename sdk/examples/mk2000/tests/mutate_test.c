@@ -45,22 +45,31 @@ static int used(const mk_track *t) {
     return n;
 }
 
+/* How many of the eight steps differ from the original's. */
+static int changed(const mk_track *track, const mk_track *original) {
+    int n = 0;
+    for (int s = 0; s < 8; s++) n += memcmp(track->step[s].note, original->step[s].note, MK_POLY) != 0;
+    return n;
+}
+
 static void test_variations(void) {
     int before = failures;
     mk_pattern_init(&pattern);
     mk_track *original = &pattern.track[0], *track = &copy.track[0];
     fill(original);
-    long moved = 0, borrowed = 0, octaves = 0, differ_from_last = 0;
+    long differ_from_last = 0, octaves = 0, moved = 0, harmonies = 0;
+    long changes[3] = { 0 };            /* at amounts 10, 30 and 100 */
     static mk_step last[8];
-    for (int round = 0; round < 2000; round++) {
+    for (int round = 0; round < 3000; round++) {
+        int amount = round % 3 == 0 ? 10 : round % 3 == 1 ? 30 : 100;
         seed = (uint32_t)round * 2654435761u + 1;
         memcpy(&copy, &pattern, sizeof copy);
         if (round & 1) memset(track->step, 0x55, 8 * sizeof track->step[0]);    /* built from the original only */
-        mk_mutate(track, original, random_);
+        mk_mutate(track, original, amount, random_);
         CHECK_EQ(track->length, 8);
-        CHECK_EQ(used(track), 6);
+        CHECK_EQ(used(track), 6);       /* a rest stays a rest unless a note moves into it */
         CHECK_EQ(memcmp(&track->step[8], &original->step[8], (MK_STEPS - 8) * sizeof track->step[0]), 0);
-        int velocities = 0, same = 0, ratchets = 0;
+        int velocities = 0, ratchets = 0;
         for (int s = 0; s < 8; s++) {
             const mk_step *st = &track->step[s], *was = &original->step[s];
             CHECK_EQ(st->controller[MK_CTL_MOD], was->controller[MK_CTL_MOD]);  /* automation stays in time */
@@ -68,30 +77,83 @@ static void test_variations(void) {
             if (!mk_step_used(st)) continue;
             velocities += st->velocity[0];
             moved += st->velocity[0] != was->velocity[0];
-            int pitch = st->note[0] % 12, known = 0, exact = 0;
-            for (int o = 0; o < 8; o++) {
-                known |= original->step[o].note[0] && original->step[o].note[0] % 12 == pitch;
-                exact |= original->step[o].note[0] == st->note[0];
+            harmonies += st->note[1] && st->velocity[0] != 94;
+            for (int i = 0; i < MK_POLY && st->note[i]; i++) {
+                int pitch = st->note[i] % 12, exact = 0;
+                CHECK_EQ(pitch == 0 || pitch == 2 || pitch == 4 || pitch == 5 || pitch == 7 || pitch == 9 || pitch == 11, 1);
+                CHECK_EQ(st->note[i] >= 60 - 12 && st->note[i] <= 72 + 12, 1);  /* within an octave of the range */
+                CHECK_EQ(st->velocity[i] >= 1 && st->velocity[i] <= 127, 1);
+                for (int o = 0; o < 8; o++)
+                    for (int j = 0; j < 2; j++) exact |= original->step[o].note[j] == st->note[i];
+                octaves += !exact;
             }
-            CHECK_EQ(known, 1);         /* every note is one of the track's, in some octave */
-            octaves += !exact;
-            borrowed += exact && st->velocity[0] >= 90 && st->note[0] != original->step[st->velocity[0] - 90].note[0];
-            for (int i = 0; i < MK_POLY && st->note[i]; i++) CHECK_EQ(st->velocity[i] >= 1 && st->velocity[i] <= 127, 1);
-            same += st->note[0] == was->note[0] && st->note[1] == was->note[1];
         }
         CHECK_EQ(velocities, 90 + 91 + 93 + 94 + 95 + 97);      /* the same hits, wherever they went */
         CHECK_EQ(ratchets, 1);
-        CHECK_EQ(same < 6, 1);          /* never the original again */
+        CHECK_EQ(changed(track, original) > 0, 1);              /* never the original again */
+        changes[round % 3] += changed(track, original);
         differ_from_last += memcmp(last, track->step, sizeof last) != 0;
         memcpy(last, track->step, sizeof last);
     }
-    CHECK_EQ(differ_from_last > 1990, 1);
-    CHECK_EQ(moved > 2000 && moved < 8000, 1);          /* of 12000 steps: some move, most stay */
-    CHECK_EQ(borrowed > 1500 && borrowed < 6000, 1);
-    CHECK_EQ(octaves > 500 && octaves < 3000, 1);
-    printf("   of 12000 steps over 2000 variations: %ld moved, %ld took another step's note, %ld an octave away\n", moved,
-           borrowed, octaves);
-    ok("every variation keeps the hits, the velocities and the track's notes, and differs", before);
+    CHECK_EQ(differ_from_last > 2950, 1);
+    CHECK_EQ(changes[0] < changes[1] && changes[1] < changes[2], 1);    /* more amount, more change */
+    CHECK_EQ(changes[0] > 1000 && changes[2] < 7900, 1);        /* of 8000 steps each: a little, and not all */
+    CHECK_EQ(moved > 0 && octaves > 0 && harmonies > 0, 1);     /* C major has all seven: the track has a chord */
+    printf("   steps changed of 8000 at amounts 10, 30, 100: %ld, %ld, %ld; %ld notes outside the original's\n",
+           changes[0], changes[1], changes[2], octaves);
+    seed = 99;                          /* the same numbers, the same variation */
+    memcpy(&copy, &pattern, sizeof copy);
+    mk_mutate(track, original, 30, random_);
+    memcpy(last, track->step, sizeof last);
+    seed = 99;
+    mk_mutate(track, original, 30, random_);
+    CHECK_EQ(memcmp(last, track->step, sizeof last), 0);
+    ok("every variation keeps the hits, the velocities and the scale, differs, and goes as far as the amount", before);
+}
+
+static void test_scale(void) {
+    int before = failures;
+    mk_pattern_init(&pattern);
+    mk_track *original = &pattern.track[0], *track = &copy.track[0];
+    static const uint8_t minor[5] = { 57, 60, 62, 64, 67 };     /* A C D E G: a pentatonic, and nothing else */
+    original->length = 16;
+    for (int s = 0; s < 16; s++) {
+        original->step[s].note[0] = (uint8_t)(minor[s % 5] + (s > 9 ? 12 : 0));
+        original->step[s].velocity[0] = 100;
+    }
+    for (int round = 0; round < 500; round++) {
+        seed = (uint32_t)round * 40503u + 3;
+        memcpy(&copy, &pattern, sizeof copy);
+        mk_mutate(track, original, 100, random_);
+        for (int s = 0; s < 16; s++) {
+            int pitch = track->step[s].note[0] % 12;
+            CHECK_EQ(pitch == 9 || pitch == 0 || pitch == 2 || pitch == 4 || pitch == 7, 1);
+        }
+    }
+    original->length = 4;               /* C C# D D#: no scale fits, so only these four are used */
+    for (int s = 0; s < 4; s++) original->step[s].note[0] = (uint8_t)(60 + s);
+    for (int round = 0; round < 500; round++) {
+        seed = (uint32_t)round * 40503u + 3;
+        memcpy(&copy, &pattern, sizeof copy);
+        mk_mutate(track, original, 100, random_);
+        for (int s = 0; s < 4; s++) CHECK_EQ(track->step[s].note[0] % 12 < 4, 1);
+    }
+    ok("the track's own notes set the scale: a pentatonic stays one, and notes no scale has stay themselves", before);
+}
+
+static void test_amount(void) {
+    int before = failures;
+    CHECK_EQ(mk_mutate_amount(0), 30);
+    CHECK_EQ(mk_mutate_amount(249), 30);
+    CHECK_EQ(mk_mutate_amount(250), 0);
+    CHECK_EQ(mk_mutate_amount(750), 50);
+    CHECK_EQ(mk_mutate_amount(1249), 99);
+    CHECK_EQ(mk_mutate_amount(1250), 100);
+    CHECK_EQ(mk_mutate_amount(1583), 50);
+    CHECK_EQ(mk_mutate_amount(1915), 0);
+    CHECK_EQ(mk_mutate_amount(1916 + 500), 50);
+    for (uint32_t ms = 0; ms < 10000; ms++) CHECK_EQ(mk_mutate_amount(ms) >= 0 && mk_mutate_amount(ms) <= 100, 1);
+    ok("the amount from how long Mutate is held: 30 for a tap, then up over a second and down again", before);
 }
 
 static void test_edges(void) {
@@ -100,24 +162,15 @@ static void test_edges(void) {
     mk_track *original = &pattern.track[0], *track = &copy.track[0];
     memcpy(&copy, &pattern, sizeof copy);
     seed = 7;
-    mk_mutate(track, original, random_);                /* empty: stays empty */
+    mk_mutate(track, original, 30, random_);            /* empty: stays empty */
     CHECK_EQ(used(track), 0);
-    original->length = 1;                               /* one step: an octave is all there is */
+    original->length = 1;                               /* one step of one note: an octave is all there is */
     original->step[0].note[0] = 60;
     original->step[0].velocity[0] = 100;
     for (int round = 0; round < 50; round++) {
         memcpy(&copy, &pattern, sizeof copy);
-        mk_mutate(track, original, random_);
+        mk_mutate(track, original, 30, random_);
         CHECK_EQ(track->step[0].note[0] == 72 || track->step[0].note[0] == 48, 1);
-    }
-    original->step[0].note[0] = 127;                    /* nowhere to go but down */
-    original->step[0].note[1] = 120;
-    original->step[0].velocity[1] = 100;
-    for (int round = 0; round < 50; round++) {
-        memcpy(&copy, &pattern, sizeof copy);
-        mk_mutate(track, original, random_);
-        CHECK_EQ(track->step[0].note[0], 115);
-        CHECK_EQ(track->step[0].note[1], 108);
     }
     original->length = 64;                              /* a full track of the highest and lowest notes */
     for (int s = 0; s < 64; s++) {
@@ -126,19 +179,24 @@ static void test_edges(void) {
     }
     for (int round = 0; round < 200; round++) {
         memcpy(&copy, &pattern, sizeof copy);
-        mk_mutate(track, original, random_);
+        mk_mutate(track, original, 1 + round % 100, random_);
         CHECK_EQ(used(track), 64);
         for (int s = 0; s < 64; s++)
             for (int i = 0; i < MK_POLY; i++) CHECK_EQ(track->step[s].note[i] >= 1 && track->step[s].note[i] <= 127, 1);
     }
     memcpy(&copy, &pattern, sizeof copy);
-    mk_mutate(track, original, NULL);                   /* no random numbers: the original */
+    mk_mutate(track, original, 30, NULL);               /* no random numbers: the original */
     CHECK_EQ(memcmp(track->step, original->step, sizeof track->step), 0);
-    ok("empty, one step, the ends of the range, a full track", before);
+    memset(track->step, 0x55, sizeof track->step);
+    mk_mutate(track, original, 0, random_);             /* no amount: the original */
+    CHECK_EQ(memcmp(track->step, original->step, sizeof track->step), 0);
+    ok("empty, one step, the ends of the range, a full track, no amount", before);
 }
 
 int main(void) {
     test_variations();
+    test_scale();
+    test_amount();
     test_edges();
     if (failures) printf("%d checks failed\n", failures);
     return failures != 0;

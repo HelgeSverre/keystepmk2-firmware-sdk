@@ -2,28 +2,26 @@
 
 KeyStep MK2000 is a replacement firmware for the 32-key Arturia KeyStep mk2. It turns the unit
 into a four-track step sequencer with an arpeggiator, chords, scales, pattern chains and MIDI
-channels you change from the keys, while keeping what is printed on the panel meaning what it
-says.
+channels you change from the keys. What is printed on the panel keeps its meaning.
 
 This is the plain-text guide; [user-guide.html](user-guide.html) is the same guide as a designed
-page with the panel and the displays drawn. This guide is for playing it. How it is built is in [MK2000.md](MK2000.md); how to put it on a
-unit and get back to Arturia's firmware is in [FLASHING.md](FLASHING.md).
+page with the panel and the displays drawn. How it is built is in [MK2000.md](MK2000.md); how to
+put it on a unit and get back to Arturia's firmware is in [FLASHING.md](FLASHING.md).
 
-> MK2000 is unofficial and new. It has run on one unit. Take the copy of your unit's memory that
-> FLASHING.md describes before you install it, and keep Arturia's firmware at hand: `just
-> flash-stock` puts it back, and your Arturia patterns are still there when you do.
+> MK2000 is unofficial and new. It has run on one unit, over USB MIDI. MIDI on the DIN sockets,
+> external clock, MIDI thru and the CV, gate and sync outputs have not been tried on a unit yet.
+> Take the copy of your unit's memory that FLASHING.md describes before you install it, and keep
+> Arturia's firmware at hand: `just flash-stock` puts it back, and your Arturia patterns are still
+> there when you do.
 
 ## The panel
 
 Everything you do while playing is a held button plus a key. The keys carry the same printing as
 on the stock firmware, and this guide uses these names for them:
 
-```keys
-```
-
 | Name | Keys | Used for |
 |---|---|---|
-| Bank keys 1–4 | the lowest four | Tracks, banks, pages of 16 |
+| Bank keys 1–4 | the lowest four | Tracks, banks, pages of 16, arp octaves |
 | Numbered keys 1–16 | the next sixteen | Patterns, steps, channels, mutes |
 | Edit keys | the top twelve | Time division, Nudge, Octave, Double, Quant, Reload, Clear, Undo |
 
@@ -36,13 +34,15 @@ switching anything.
 
 ## How it is organised
 
-- A **pattern** has four **tracks** and a tempo.
+- A **pattern** has four **tracks**, a tempo and a scale choice.
 - A **track** has a MIDI channel, a length of 1 to 64 steps, a time division, swing, gate length
   and direction of its own. Tracks of different lengths and speeds run side by side.
 - A **step** holds up to eight notes, with velocity, gate, probability, ratchet, a condition, a
   tie and a timing offset.
 - There are 64 pattern slots: 4 **banks** of 16.
 - One **arpeggiator** and one **chord** mode work on the keys.
+- A new pattern is 120 BPM, with tracks 1–4 on MIDI channels 1–4, each 16 steps of 1/16.
+- Everything MK2000 plays goes out on both the MIDI socket and USB.
 
 Three switches decide what happens when you play:
 
@@ -63,17 +63,22 @@ Bank: 1 | Preset: 3*
 [T1] T2  --  T4          KBD T1
 ```
 
-- Top: the tempo, the scale in force if there is one, and the selected track's time division.
-- Middle: the pattern in use. A `*` means it has edits that are not saved.
-- Bottom: the four tracks. The selected one is boxed, an empty one is `--`, a muted one is struck
-  through. With Seq switched off no track plays, muted or not, and this line reads `Seq off`
-  instead: tap Seq to switch the tracks back on. At the right is where the keys go: `KBD T1` (the selected track's channel) or `KBD 9`
-  (home channel 9).
+- Top: the tempo (`Ext Tempo` while it follows an outside clock), the scale in force if there is
+  one, and the selected track's time division.
+- Middle: the pattern in use. A `*` means it has edits that are not saved; `...` means it is the
+  pattern waiting to take over. Messages such as `Pattern Saved` show here for a moment.
+- Bottom: the four tracks. The selected one is boxed, an empty one is `--`, a muted or soloed-out
+  one is struck through. With Seq switched off no track plays, muted or not, and this line reads
+  `Seq off` instead: tap Seq to switch the tracks back on. At the right is where the keys go:
+  `KBD T1` (the selected track's channel), `KBD 9` (home channel 9), or `REC T1` while recording.
 - While it plays, a bar along the bottom shows where the selected track is.
+
+Holding a button that has a layer (Seq, Shift, Shift + Stop, Shift + Tempo, Arp, Chord) shows its
+own screen until you let go.
 
 ## Your first pattern
 
-1. Press **Record**. The display shows `T1 Rec` and `Keys: add notes`.
+1. With the clock stopped, press **Record**. The display shows `T1 Rec` and `Keys: add notes`.
 2. Play a note or a chord for each step. **Hold** adds a rest. Keys + **Hold** ties the step into
    the next.
 3. Press **Record** again. The track is as long as the steps you entered.
@@ -82,7 +87,8 @@ Bank: 1 | Preset: 3*
    length can be different.
 6. **Shift + Seq**, then click the encoder, to save.
 
-Nothing is saved by itself. The `*` on the home screen tells you there is something to save.
+A pattern is saved only when you save it; the `*` on the home screen tells you there is something
+to save. Settings and chains are saved by themselves.
 
 ## Tracks
 
@@ -94,12 +100,12 @@ Nothing is saved by itself. The `*` on the home screen tells you there is someth
 | Open the track's settings | Seq + encoder click |
 | Open the track's step page | Seq + encoder turn |
 | Set the length | Shift + Tempo, then turn, or press a numbered key (a bank key first picks the page of 16) |
-| Change the time division | Shift + the Time Div edit keys: slower, faster, triplet |
-| Move every step one place | Shift + Nudge − or Nudge + |
-| Move the track an octave | Shift + Octave − or Octave + |
-| Repeat the track after itself | Shift + Double |
-| Empty the track | Shift + Clear |
-| Take back the last edit | Shift + Undo |
+| Change the time division | Shift + the Time Div edit keys: slower, faster, triplet on or off |
+| Move every step one place earlier or later | Shift + Nudge − or Nudge + |
+| Move the track an octave | Shift + Octave − or Octave + (up to four octaves either way) |
+| Repeat the track after itself | Shift + Double (tracks of up to 32 steps) |
+| Empty the track, keeping its length | Shift + Clear |
+| Take back the last edit | Shift + Undo; press again to redo |
 
 **Track settings** (Seq + encoder click): Channel, Length, Time Div, Swing (50–75 %), Gate
 (10–90 %), Direction (Forward, Reverse, Pendulum, Random), Follows transpose, Shift (−48 to +48
@@ -110,8 +116,8 @@ to finish.
 
 The keys are in one of two states:
 
-- **Track**: they play on the selected track's channel.
-- **Home**: they play on the home channel, whatever track is selected.
+- **Track** (to begin with): they play on the selected track's channel.
+- **Home**: they play on the home channel (1 to begin with), whatever track is selected.
 
 | To | Do |
 |---|---|
@@ -127,12 +133,16 @@ While Record is on, the keys always play the selected track.
 | Start with | You get |
 |---|---|
 | Record while stopped | **Step recording**: a note or chord per step, Hold for a rest, keys + Hold for a tie. Back or Record ends it |
-| Record while playing | **Live recording** into the selected track: each note goes to the nearest step and sounds as you play it |
+| Record while playing | **Live recording** into the selected track: each note goes to the nearest step and sounds as you play it. Record, Stop or Back ends it |
 | Record, then Play | A bar of **count-in** on the display and the lights, then live recording |
 
 - Recording **replaces** the track unless Overdub is on (Shift + Record). The track is only
   cleared when you play the first note, so a stray press of Record costs nothing.
-- A track first recorded live takes the length of track 1, or 16 steps.
+- While you record, the arp and Transpose Hold are out of the way: the keys play and record
+  directly, on the selected track's channel.
+- Step recording with Overdub on, over a track that has notes, writes over its steps from step 1
+  and keeps its length; turn the encoder to move to another step.
+- An empty track recorded live takes the length of track 1, or 16 steps.
 - **Rec Quantize** (global settings, on by default): on, a live note lands on the grid; off, it
   keeps the moment you played it.
 - **Quant** (Shift + Quant) puts every step of the track on the grid. Track settings has Quantize
@@ -154,10 +164,13 @@ C4 E4 G4
 - **Turn** to move along the steps. You can go on past the end of the track, up to step 64.
 - **Press a key** to put its note on the step. Hold several keys for a chord. You hear it on the
   track's channel, and the page stays on the step so you can try another.
-- **Hold** makes the step a rest. Shift + Undo brings it back.
+- **Hold** (or Shift + Clear) makes the step a rest. Shift + Undo brings back the track as it was
+  when you opened the page.
 - **Click** opens the step's fields; **Back** returns.
 - With **Seq held**: a numbered key jumps to that step of the 16 shown, the encoder moves 16
   steps at a time, and a bank key selects the track.
+- On this page the keys enter single notes, fitted to the scale; chord mode and the arp do not
+  apply.
 
 **Steps past the end.** A track plays steps 1 to its length. The steps after that keep whatever
 you put there and are silent until the length reaches them. They are drawn as dots, or a small
@@ -170,20 +183,28 @@ phrase and bring it in by lengthening the track.
 | Field | Values |
 |---|---|
 | Velocity | 1–127, for every note of the step |
-| Gate | 5–100 % of the step, or `Track` to use the track's gate |
-| Probability | 0–100 % |
+| Gate | `Track` (the track's gate), then 5–100 % of the step in fives |
+| Probability | 0–100 % in fives |
 | Ratchet | 1–4 evenly spaced hits |
 | Condition | Always, 1 of 2, 2 of 2, 1 of 3, 1 of 4, First, Not first (counted in passes of the track) |
 | Tie | The notes run into the next step |
-| Offset | −50 to +50 % of a step: early or late |
+| Offset | −50 to +50 % of a step in fives: early or late |
 
 Keys played while you are inside a step replace its notes.
 
 ### Mutate
 
-**Mutate** makes a variation of the selected track: some steps change places with a neighbour,
-some play the notes of another step, a few jump an octave. It keeps the same number of notes and
-their velocities. Each press is a new variation of the original, not of the last one.
+**Mutate** makes a variation of the selected track when you let go of the button. It moves
+stretches of the track up or down the scale, mirrors them, plays them backwards, swaps blocks of
+steps, and now and then writes a run. It works out the scale from the notes the track already
+has, so the variation stays in key, and it keeps the same number of notes and their velocities.
+
+How long you hold the button says how far it goes. A tap is a moderate variation. Hold it and
+the display shows a turning double helix with a line along the bottom: the line is the amount,
+growing over a second and shrinking again. Let go when it is short for a small change, long for
+a big one.
+
+Each one is a new variation of the original, not of the last one.
 **Shift + Mutate** brings the original back. The Mutate light is on while the track is a
 variation. Saving keeps the variation as the pattern.
 
@@ -191,20 +212,25 @@ variation. Saving keeps the variation as the pattern.
 
 | To | Do |
 |---|---|
-| Choose a bank | Shift + bank key |
-| Choose a pattern | Shift + numbered key. It takes over when track 1 next wraps (or at once: see Pattern change) |
-| Save | Shift + Seq, then click. A numbered key picks another slot first; Back cancels |
+| Choose a bank | Shift + bank key. This switches to the pattern with the same number in that bank |
+| Choose a pattern | Shift + numbered key. While playing it takes over when track 1 next wraps, or at once with Pattern change set to At once; stopped, at once. Stop also lets a waiting pattern take over |
+| Save | Shift + Seq, then click. A bank key or numbered key, or turning, picks another slot first; Back cancels |
 | Reload the saved pattern | Shift + Reload |
 | Chain patterns | Shift + Play |
 
-**Chains.** On the chain page, numbered keys add patterns of the current bank (up to 32), Hold
-removes the last, Shift + Clear empties it, and turning switches the chain on or off. With a
-chain on, Play starts on its first pattern and each hands over to the next when track 1 wraps.
-Picking a pattern by hand switches the chain off.
+An empty slot gives a new pattern with the tempo and channels of the one you had. The save page
+says `Replaces a pattern` or `Empty slot`; `Memory Full` means there is no room left.
 
-**Tempo.** Hold Tempo and turn, 1 BPM a click, or tap Tempo two to four times. Each pattern
-stores its tempo; *Tempo on change* in global settings decides whether a pattern brings its tempo
-with it.
+**Chains.** Each bank has its own chain. On the chain page, numbered keys add patterns of the
+current bank (up to 32), Hold removes the last, Shift + Clear empties it, turning right switches
+the chain on and left off, and a click or Back closes the page. With a chain on, Play starts on
+its first pattern and each hands over to the next when track 1 wraps, round and round. Picking a
+pattern by hand switches the chain off.
+
+**Tempo.** Hold Tempo and turn, 1 BPM a click, from 30 to 240 BPM, or tap Tempo two to four times
+(a pause of more than 2 s starts the count again). Each pattern stores its tempo; *Tempo on
+change* in global settings decides whether a pattern you pick brings its tempo with it: only when
+stopped, always, or never.
 
 ## Arpeggiator
 
@@ -216,10 +242,12 @@ with it.
 | Latch | Hold. New keys replace the latched ones |
 | Open its settings | Arp + encoder click |
 
-The arp plays on the channel the keys go to and stays in step with the tracks.
+The arp plays on the channel the keys go to and stays in step with the tracks. It starts as Up,
+one octave, 1/16.
 
-**Arp settings:** Arp Length (1–64 steps: the pattern starts again after that many), Arp
-Retrigger (off lets it run on), Mode, Octaves, Time Division, Gate, Swing.
+**Arp settings:** Arp Length (1–64 steps, 16 to begin with: the pattern starts again after that
+many), Arp Retrigger (On; Off lets it run on), Mode, Octaves, Time Division, Gate (10–90 %),
+Swing (50–75 %).
 
 ## Chords
 
@@ -227,15 +255,16 @@ Retrigger (off lets it run on), Mode, Octaves, Time Division, Gate, Swing.
 |---|---|
 | Switch chord mode on or off | Tap Chord |
 | Choose a preset | Chord + turn |
-| Teach it your own chord | Hold Chord and play the keys; let go |
+| Teach it your own chord | Hold Chord and play up to eight keys (they do not sound); let go. Chord mode goes on with it |
 | Open the chord page | Chord + encoder click |
 
-Presets: User, Oct, 5th, Maj, min, sus2, sus4, Maj7, min7, Maj9, min9, Maj11, min11.
+Presets: User, Oct, 5th, Maj, min, sus2, sus4, Maj7, min7, Maj9, min9, Maj11, min11. The preset
+starts on User, which is the key alone until you teach it a chord.
 
-**Chord page:** Preset, Strum (0–80 ms from one note to the next), Strum Type (Up, Alt Up, Down,
-Alt Down, Random) and Voicing. Voicing `On` keeps a run of chords in one register: notes of each
-new chord move an octave towards where the last chord sounded. `Bass −1`, `−2` or `−3` adds the
-root that many octaves down.
+**Chord page:** Preset, Strum (0–80 ms from one note to the next, 0 to begin with), Strum Type
+(Up, Alt Up, Down, Alt Down, Random) and Voicing (Off, On, Bass -1, Bass -2, Bass -3). Voicing
+`On` keeps a run of chords in one register: notes of each new chord move an octave towards where
+the last chord sounded. `Bass -1`, `-2` or `-3` adds the root that many octaves down.
 
 Chords are recorded whole, and with the arp on, the arp runs over the chord of each key.
 
@@ -243,12 +272,13 @@ Chords are recorded whole, and with the arp on, the arp runs over the chord of e
 
 **Shift + Chord** opens the scale page. With a scale on, a key outside it plays the nearest note
 of the scale (the lower one when two are as near). This applies to everything the keys do: notes,
-chords, the arp and recording.
+chords, the arp and recording. Notes already in a track stay as they are when you change the
+scale.
 
 | Setting | What it is |
 |---|---|
-| Global Scale, Global Root | Used by every pattern that does not have its own |
-| Pattern Scale | `Global`, a scale of its own, `User`, or `Off`. Saved with the pattern |
+| Global Scale, Global Root | Used by every pattern set to `Global`. Off and C to begin with |
+| Pattern Scale | `Off`, `Global` (to begin with), a scale of its own, or `User`. Saved with the pattern |
 | Pattern Root | The root of the pattern's own scale |
 
 **User** is a scale you make. Open Pattern Scale for editing, turn to `User`, and press keys: each
@@ -271,37 +301,50 @@ Pentatonic Major, Pentatonic Minor, Japanese, Gypsy, Arabic, Freygish.
 | Shift + three quick taps on the Mod strip | **Dice** |
 
 **Spice** gives every step of the track its own change of velocity and gate length: a little at
-the bottom of the strip, a lot at the top. The change is the same every time round, so it is a
-variation you can keep, not noise. **Dice** deals new changes. Spice is also in track settings.
+the bottom of the strip, a lot at the top. Higher up, some steps drop out and some play an
+octave up or down. The change is the same every time round, so it is a variation you can keep,
+not noise. **Dice** deals new changes. Spice is also in track settings.
 
-**Shift + Hold** is Transpose Hold: the keys transpose the selected track instead of playing.
+**Shift + Hold** is Transpose Hold: instead of playing, a key transposes the selected track (and
+every track with Follows transpose on) by how far it is from the track's first note. The
+transposition stays when you switch Transpose Hold off; play that first note in Transpose Hold to
+take it back.
+
+**Oct − and Oct +** move the keys an octave, up to three either way.
 
 ## Sync and MIDI
 
 **Clock Receive** (global settings) chooses what the tempo follows: Auto, Internal, USB, MIDI Din
-or Sync In. Auto uses its own clock until a clock arrives on USB or MIDI, follows that, and goes
-back to its own two seconds after it stops. MK2000 always sends MIDI clock and the sync output,
-so it passes the tempo on.
+or Sync In. Auto uses its own clock until a clock arrives on USB or MIDI, or a pulse on the sync
+input while stopped; it follows that, and goes back to its own clock two seconds after it stops.
+Sync In expects one pulse per sixteenth. Following a clock, Play starts on its next pulse, and
+MIDI Start or Continue start from the top. MK2000 always sends MIDI clock and the sync output, so
+it passes the tempo on.
 
 **MIDI Thru** passes what arrives on the MIDI input to the MIDI output and USB. **USB to MIDI**
-passes what arrives on USB to the MIDI output.
+passes what arrives on USB to the MIDI output. Clock, Start, Continue and Stop are not passed on,
+and notes that come in do not reach the arp, recording or the CV outputs.
 
 ## CV outputs
 
-Whatever plays on **track 1's channel**, from the track, the keys or the arp, also plays on the
-pitch and gate outputs. Global settings → **CV Settings**:
+Every note on **track 1's channel**, from any track, the keys or the arp, also plays on the pitch
+and gate outputs; the newest note sets the pitch. The Bend strip moves the pitch output, and the
+Mod strip and aftertouch drive the mod outputs set to ModWheel or Aftertouch. Global settings →
+**CV Settings** (defaults in brackets):
 
 | Setting | Values |
 |---|---|
-| Pitch Format | VoltOct, HertzVolt |
-| Pitch Ref | C-2 to C3 |
-| Pitch Bend Range | 1–24 semitones |
-| Gate Format | S-trig, V-trig 5V, V-trig 12V |
-| Gate Retrig | Mono, Legato, Legato Slide |
-| Mod 1 Source, Mod 2 Source | Velocity, Aftertouch, ModWheel, Random, Pulse |
-| Mod 1 Max Volt, Mod 2 Max Volt | 1–10 V |
-| Wheel Vibrato | 0–12 semitones: how far the Mod strip wobbles the pitch output. CV only |
-| Vibrato Rate | 0.3–10 Hz |
+| Pitch Format | VoltOct, HertzVolt (VoltOct) |
+| Pitch Ref | C-2 to C3 (C1) |
+| Pitch Bend Range | 1–24 semitones (2) |
+| Gate Format | S-trig, V-trig 5V, V-trig 12V (V-trig 5V) |
+| Gate Retrig | Mono, Legato, Legato Slide (Legato) |
+| Mod 1 Source, Mod 2 Source | Velocity, Aftertouch, ModWheel, Random, Pulse (Velocity, ModWheel) |
+| Mod 1 Max Volt, Mod 2 Max Volt | 1–10 V (5) |
+| Wheel Vibrato | 0–12 semitones in halves (0): how far the Mod strip wobbles the pitch output. CV only |
+| Vibrato Rate | 0.3–10 Hz (1.0) |
+
+The CV outputs have not been tried on a unit yet.
 
 The outputs use your unit's factory calibration, read from where Arturia's firmware keeps it.
 About (in global settings) says `CV: calibrated` when it was found.
@@ -310,24 +353,24 @@ About (in global settings) says `CV: calibrated` when it was found.
 
 Click the encoder with nothing held.
 
-| Setting | Values |
+| Setting | Values (default) |
 |---|---|
-| Brightness | 1–10, of the button lights |
-| Pattern change | At the wrap, At once |
-| Tempo on change | When stopped, Always, Never |
-| Overdub | Off, On |
-| Rec Quantize | On, Off |
-| Rec Autom | On, Off |
-| Keys | Track, Home |
-| Home channel | 1–16 |
-| Aft Sensitivity | Off, Low, Medium, High |
-| Clock Receive | Auto, Internal, USB, MIDI Din, Sync In |
-| MIDI Thru | Off, On |
-| USB to MIDI | Off, On |
-| CV Settings | A page of its own |
-| About | Version and free memory |
+| Brightness | 1–10, of the button lights (10) |
+| Pattern change | At the wrap, At once (At the wrap) |
+| Tempo on change | When stopped, Always, Never (When stopped) |
+| Overdub | Off, On (Off) |
+| Rec Quantize | Off, On (On) |
+| Rec Autom | Off, On (On) |
+| Keys | Home, Track (Track) |
+| Home channel | 1–16 (1) |
+| Aft Sensitivity | Off, Low, Medium, High (Medium) |
+| Clock Receive | Auto, Internal, USB, MIDI Din, Sync In (Auto) |
+| MIDI Thru | Off, On (Off) |
+| USB to MIDI | Off, On (Off) |
+| CV Settings | Click to open; Back comes back |
+| About | Click: version, free memory (`Free 12/31`, in sectors) and the CV calibration |
 
-Settings are written a moment after a change, while stopped.
+Settings are saved two seconds after the last change, once the clock is stopped.
 
 ## Every gesture
 
@@ -348,14 +391,15 @@ Settings are written a moment after a change, while stopped.
 | Chord + keys | Learn the user chord |
 | Chord + encoder turn | Chord preset |
 | Chord + encoder click | Chord page |
-| Mutate | New variation of the track |
+| Mutate | New variation of the track; hold for more or less of it |
 | Shift + Mutate | The original back |
 | Shift + Chord | Scale page |
 | Shift + Stop tap | Keys: Track or Home |
 | Shift + Stop + numbered key | Home channel |
 | Shift + Stop + Seq + numbered key | Selected track's channel |
 | Shift + Stop + bank key, numbered key | That track's channel |
-| Shift + bank key | Bank |
+| Shift + Stop + turn | Home channel |
+| Shift + bank key | Same pattern number in that bank |
 | Shift + numbered key | Pattern |
 | Shift + Seq | Save |
 | Shift + Play | Chain page |
@@ -364,11 +408,12 @@ Settings are written a moment after a change, while stopped.
 | Shift + Record | Overdub on or off |
 | Shift + Hold | Transpose Hold |
 | Tempo + turn, Tempo taps | Tempo |
+| Oct −, Oct + | Keys an octave down or up |
 | Record | Step recording (stopped) or live recording (playing) |
 | Record, then Play | Count-in, then live recording |
-| Hold | Latch; a rest in step recording and on the step page |
+| Hold | Latch; a rest in step recording and on the step page; the last pattern off the chain page |
 | Encoder click | Global settings |
-| Back | Leave a page, end recording |
+| Back | Leave a page, cancel saving, end recording |
 
 ## Lights
 
@@ -381,8 +426,9 @@ Settings are written a moment after a change, while stopped.
 | Stop | Dim while stopped |
 | Record | Red while recording, blinking during the count-in, dim when Overdub is on |
 | Hold | On when latched, blinking in Transpose Hold |
+| Shift, Tempo | On while held |
 | Oct − / + | Brighter per octave |
-| Encoder | On while a page is open |
+| Encoder | On while a page or the save page is open |
 
 ## Memory, and going back to Arturia's firmware
 
@@ -390,3 +436,11 @@ MK2000 keeps its patterns in a part of the unit's memory that Arturia's firmware
 never touches Arturia's patterns, settings or calibration. You can switch between the two
 firmwares as often as you like: each finds its own patterns as it left them. Roughly 16 to 30
 MK2000 patterns fit, depending on how full they are; About shows the free memory.
+
+| What | Holds | Saved |
+|---|---|---|
+| A pattern | Its tempo, scale choice and four tracks, with their settings, mutes and steps | Only when you save it (Shift + Seq) |
+| The settings | Global and CV settings, the global scale, arp and chord settings, Seq, Arp and Chord on or off, Overdub, the pattern last used | By themselves, two seconds after a change, once stopped |
+| The chains | One per bank, and whether it is on | By themselves, when the chain page closes |
+
+Not kept when you switch off: the selected track, the octave, Hold, Transpose Hold, solo.

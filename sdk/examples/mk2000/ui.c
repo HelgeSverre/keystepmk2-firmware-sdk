@@ -574,7 +574,7 @@ static void pressed_button(uint32_t button, uint32_t buttons, uint32_t now) {
         break;
     case KS_BTN_MUTATE:                                 /* both as in the stock firmware */
         if (others == KS_BTN_SHIFT) app_mutate_reset();
-        else if (!others && !app.recording) app_mutate();
+        else if (!others && !app.recording) app_mutate_begin();
         break;
     case KS_BTN_CHORD:
         if (others == KS_BTN_SHIFT) {                   /* the stock gesture */

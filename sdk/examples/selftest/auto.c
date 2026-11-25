@@ -123,7 +123,7 @@ static void check_flash_write(void) {
         RESULT(C_FLASH_WRITE, SKIP, flash_known ? "no blank sector" : "unknown chip", 0);
         return;
     }
-    uint32_t addr = blank_sector + 200, seed = ks_micros();     /* 300 bytes from 200: over two page ends */
+    uint32_t addr = blank_sector + 200, seed = ks_micros();     /* 300 bytes from 200: across a page boundary */
     for (unsigned i = 0; i < sizeof out; i++) out[i] = (uint8_t)(i * 7 + seed);
     uint32_t start = ks_millis();
     int32_t wrote = ks_flash_write(addr, out, sizeof out), bad = 0;
@@ -159,9 +159,9 @@ static void check_flash_store(void) {
            slot, saved, loaded, bad, erased, left, after);
 }
 
-/* ---- sync: with nothing in the sync socket the inputs are expected to read the unit's own
- * outputs. That is known from the emulator's model only, so no loop at all is a SKIP, and the
- * run line, which nothing counts, is reported and not judged. ---- */
+/* ---- sync: in the emulator's model an empty sync socket reads the unit's own outputs; on a
+ * unit it does not (docs/SELFTEST.md), so no loop at all is a SKIP. The run line, which nothing
+ * counts, is reported and not judged. ---- */
 
 static volatile uint32_t sync_heard;
 

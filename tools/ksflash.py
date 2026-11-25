@@ -221,7 +221,7 @@ def flash(
 
 
 class FakeBootloader:
-    """A guess at the factory bootloader, built from what MIDI Control Center expects of it.
+    """A model of the factory bootloader, built from what MIDI Control Center expects of it.
 
     It was written before the bootloader was read, and it differs from the real one
     (docs/BOOTLOADER.md, "The bootloader, read") where that does not matter to this tool: same
@@ -353,7 +353,7 @@ class SimTransport:
         return device if serial is None or device.serial == serial else None
 
 
-# ---- a real device, through libusb. Reading descriptors is all that has a reason to run yet. ----
+# ---- a real device, through libusb ----
 
 
 class UsbTransport:

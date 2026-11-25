@@ -2,8 +2,9 @@
  * firmware draws one (docs/STOCK-UI.md, Mutate). Two strands half a turn apart, a point every 4
  * pixels and 16 degrees along 96 pixels, radius 12, a rung between them every 8 pixels. It turns
  * 200 degrees a second, and it is tilted by two angles under 30 degrees taken from the moment
- * of the press, so every press shows it from another side. After a quarter of a second a line
- * along the bottom grows and shrinks, a second each way. */
+ * of the press, so every press shows it from another side. Held longer than a tap, a line
+ * along the bottom shows the amount the variation gets when the button is let go
+ * (mk_mutate_amount): the whole width is 100. */
 #include "app.h"
 
 static int sin127(int degrees) {
@@ -71,8 +72,5 @@ void helix_draw(uint32_t pressed_at, uint32_t now) {
         place(-48 + 4 * i, 16 * i + 180, &x1, &y1);
         line(x0, y0, x1, y1);
     }
-    if (held >= 250) {
-        uint32_t t = (held - 250) % 2000;
-        ks_oled_rect(0, KS_OLED_H - 1, (int)((t < 1000 ? t : 2000 - t) * 127 / 1000), 1, 1);
-    }
+    if (held >= 250) ks_oled_rect(0, KS_OLED_H - 1, mk_mutate_amount(held) * 127 / 100, 1, 1);
 }

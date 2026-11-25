@@ -5,17 +5,18 @@ window.
 
 **Status: most drivers checked on one unit.** `flashdump`, `bootdump`, `selftest` and `mk2000`
 have been flashed to one 32-key unit with `just flash` ([FLASHING.md](../docs/FLASHING.md)). The
-self-test ([SELFTEST.md](../docs/SELFTEST.md)) ran there on 2026-11-25 with 32 OK, 0 FAIL, 5 SKIP:
+self-test ([SELFTEST.md](../docs/SELFTEST.md)) ran there on 2026-11-25 with 32 OK, 0 FAIL, 5 SKIP,
+2 INFO:
 
 | On that unit | Drivers |
 |---|---|
-| Checked by the self-test | start-up, `ks_millis`/`ks_micros` (+10 ppm against the computer over 27 minutes), the timer, USB MIDI both ways, the display, the 13 button lights in four colours, all 14 buttons, the encoder, all 32 keys with velocity, both strips, aftertouch, the pedal socket (with a switch pedal), the external flash's id and reads, the update request |
-| Used by MK2000, not checked by the self-test | external flash erase and write, and `ks_store_*`: MK2000 has saved to the SDK's area, which left no blank sector for the self-test's write check |
-| Not tried | MIDI on the DIN sockets, pitch and mod CV, gate, sync out and in, the 39 lights of chain 0 |
+| Checked by the self-test | start-up, `ks_millis`/`ks_micros` (+10 ppm against the computer over 27 minutes), the timer, USB MIDI both ways, the display, the 13 button lights in four colours, all 14 buttons, the encoder, all 32 keys with velocity, both strips, aftertouch, the pedal socket (with a switch pedal), the external flash's id and reads |
+| Used on the unit, not checked by the self-test | the update request (`0xF2`): every `just flash` from a running SDK firmware; `ks_flash_erase` and `ks_flash_write`: MK2000's store saved to the SDK's area, which left no blank sector for the self-test's write check |
+| Not tried | `ks_store_save`/`ks_store_load` (MK2000 has its own store format), MIDI on the DIN sockets, pitch and mod CV, gate, sync out and in, the 39 lights of chain 0 |
 
-The untried drivers have only met the emulator's model of the board; they follow what the stock
-firmware does ([HARDWARE.md](../docs/HARDWARE.md)). The self-test found one error in that reading:
-aftertouch and the pedal were on each other's inputs. It is corrected.
+The untried drivers have run only against the emulator's model of the board; they follow what
+the stock firmware does ([HARDWARE.md](../docs/HARDWARE.md)). The self-test found one error in that
+reading: aftertouch and the pedal were on each other's inputs. It is corrected.
 
 ![The hello example in the panel](../docs/panel-hello.png)
 
@@ -47,25 +48,25 @@ warnings.
 
 | Folder | What it is |
 |---|---|
-| `examples/hello` | Shows every control, plays the keys as MIDI notes. The template for `make new`. |
+| `examples/hello` | Shows every control, plays the keys as MIDI notes on DIN and USB with the strips as bend and mod, and passes MIDI between USB and DIN. The template for `make new`. |
 | `examples/mk2000` | **KeyStep MK2000**, the full firmware: four tracks with ratchets, probability and conditions per step, channels changed with a held button and a numbered key, an arpeggiator, scales and chords, pattern chains, saved to flash. Design in [MK2000.md](../docs/MK2000.md); its engine, store, arpeggiator, clock and harmony have host tests in `examples/mk2000/tests`. |
 | `examples/flashdump` | Sends the whole external flash out as SysEx (USB if connected, else DIN) for `tools/flashdump.py`: the backup of a unit's patterns, settings and calibration. Reads only. |
-| `examples/selftest` | Tests the unit and the SDK's drivers on it: timing, flash, sync, the display, every light, button and key, the encoder, strips and aftertouch, with OK or FAIL on the display and a full report to the computer ([SELFTEST.md](../docs/SELFTEST.md)). |
+| `examples/selftest` | Tests the unit and the SDK's drivers on it: timing, flash, sync, the display, every button light, button and key, the encoder, strips, aftertouch, pedal, MIDI DIN, CV and gate, with OK, FAIL or SKIP on the display and a full report to the computer ([SELFTEST.md](../docs/SELFTEST.md)). |
 | `examples/bootdump` | `flashdump` reading the processor's first 32 KiB instead: the bootloader, which is in no package. Reads only. |
 | `examples/cv` | The keyboard as a CV source: pitch and gate from the keys, Mod 1 from the strip, Mod 2 from aftertouch, a clock on the sync output, and the inputs on the display. |
 | `examples/fonts` | Text in the stock firmware's two fonts (see Fonts below). |
-| `examples/flashtest` | Checks the external flash driver: chip id, the write guard, and a write and read-back in the last sector of the SDK's area. |
+| `examples/flashtest` | Checks the external flash driver: chip id, the write guard, and a write and read-back in the last sector of the SDK's area (`0x5F000`), which it erases whatever it holds. |
 
 
 ## API (`include/keystep.h`)
 
 | Function | Does |
 |---|---|
-| `ks_init()` | 64 MHz clock, pins, display, keybed scan, LEDs, MIDI, touch controller |
+| `ks_init()` | 64 MHz clock, pins, display, keybed scan, LEDs, MIDI, USB, external flash, CV and the touch controller |
 | `ks_millis()`, `ks_delay_ms(ms)`, `ks_micros16()`, `ks_micros()` | time from the 1 ms tick, a 16-bit microsecond counter, and the same carried to 32 bits (wraps after 71 minutes) |
 | `ks_timer_start(us, callback)`, `ks_timer_period(us)`, `ks_timer_stop()` | one periodic interrupt of your own, 50 to 65536 µs; `ks_timer_start` again restarts the count from now |
 | `ks_oled_clear/pixel/rect/text/text_big/flush` | 128 × 32 frame buffer; the 8 × 8 font gives 16 × 4 characters |
-| `ks_oled_text_font(font, x, y, text)`, `ks_font_width(font, text)` | proportional fonts, such as the stock firmware's (Fonts below) |
+| `ks_oled_text_font(font, x, y, text)`, `ks_font_width(font, text)`, `ks_oled_ink(on)` | proportional fonts, such as the stock firmware's (Fonts below); `ks_oled_ink(0)` draws dark text on a lit area |
 | `ks_utoa(value, out)` | decimal text, since there is no `printf` |
 | `ks_buttons()` | the 13 buttons and Tempo as `KS_BTN_*` bits |
 | `ks_encoder()` | detents turned since the last call, clockwise positive |
@@ -106,9 +107,9 @@ can be drawn the same way by filling a `ks_font`.
 
 ## How it runs
 
-- **Interrupts:** a 1 ms tick (time, encoder, one analog conversion), a 65 µs timer (one keybed
-  phase, one MIDI byte each way, the sync clock input) and USB. Everything else is polled from
-  your main loop, except the hooks you define: `ks_timer_start`'s callback, `ks_midi_realtime`
+- **Interrupts:** a 1 ms tick (time, encoder, buttons every 2 ms, one analog conversion step), a
+  65 µs timer (one keybed phase, one MIDI byte each way, the sync clock input) and USB.
+  Everything else is polled from your main loop, except the hooks you define: `ks_timer_start`'s callback, `ks_midi_realtime`
   and `ks_sync_clock_in` run in interrupts, which do not interrupt each other. The SDK's own
   short critical sections put interrupts back as they found them, so its functions can be called
   with interrupts off (to send a message whole, for example).
@@ -126,10 +127,11 @@ can be drawn the same way by filling a `ks_font`.
   `0x40000` and the factory calibration in a file system at `0x60000`. It never addresses
   `0x41000`–`0x5FFFF`, so the SDK stores there (`KS_FLASH_USER`). `ks_flash_erase` and
   `ks_flash_write` refuse every other address unless `ks_flash_allow_stock_area(1)` was called.
-  An erase can take up to 0.5 s on the chip; the emulator answers at once. A save erases its
+  The SDK waits up to 0.5 s for an erase; the emulator answers at once. A save erases its
   sector first, so power lost during a save loses that record.
-- **Memory:** 480 KiB of flash from `0x08008000` and 144 KiB of RAM. The first 32 bytes of RAM
-  belong to the bootloader hand-over and are left alone.
+- **Memory:** flash from `0x08008000` to `0x0807F800` (478 KiB): `fwpack.py` refuses an image
+  that reaches the last 2 KiB page, which holds the bootloader's mark. 144 KiB of RAM. The first
+  32 bytes of RAM belong to the bootloader hand-over and are left alone.
 
 ## Not there yet
 
@@ -139,13 +141,12 @@ can be drawn the same way by filling a `ks_font`.
   [HARDWARE.md](../docs/HARDWARE.md)).
 - The 37-key model: the emulator can run it, the SDK drivers assume 32 keys and one encoder.
 - The lights of chain 0 (`KS_LED_KEY(n)`): the 32-key unit has no lights above its keys, and
-  what the 39 positions of that chain are has not been found.
+  what the 39 positions of that chain are is not determined.
 
 ## Rules
 
 - No write to the external flash outside `0x41000`–`0x5FFFF` until the unit's flash has been
   read out and kept: the calibration at `0x60000` is per unit and is not in any firmware package.
-
 - No code that writes flash below `0x08008000` or touches the option bytes. The bootloader is
   the only way back from a bad image.
 - Report emulator results and hardware results separately. Running in the emulator does not

@@ -3,7 +3,7 @@
 
     uv run tools/fontextract.py list                       # the fonts in stock 1.0.2
     uv run tools/fontextract.py show 0 "Tempo 120.0"       # preview a text in font 0
-    uv run tools/fontextract.py header -o sdk/build/fonts/keystep_fonts.h
+    uv run tools/fontextract.py header -o sdk/build/generated/keystep_fonts.h
 
 The stock firmware carries its fonts as Windows .FNT version 2 raster fonts: a 118-byte header,
 a table of (width, offset) per character, then each glyph as columns of bytes, eight pixels wide

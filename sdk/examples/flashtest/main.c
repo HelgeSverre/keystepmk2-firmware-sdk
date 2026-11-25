@@ -28,7 +28,7 @@ static int round_trip(void) {
     ks_flash_read(TEST_ADDR + 200, in, sizeof in);
     for (unsigned i = 0; i < sizeof in; i++)
         if (in[i] != 0xFF) return 0;                                    /* erased */
-    if (ks_flash_write(TEST_ADDR + 200, out, sizeof out)) return 0;     /* crosses two pages */
+    if (ks_flash_write(TEST_ADDR + 200, out, sizeof out)) return 0;     /* crosses a page boundary */
     ks_flash_read(TEST_ADDR + 200, in, sizeof in);
     for (unsigned i = 0; i < sizeof in; i++)
         if (in[i] != out[i]) return 0;

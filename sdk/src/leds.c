@@ -1,6 +1,7 @@
 /* 54 addressable LEDs on one data line (PA6, TIM16 channel 1 at 800 kHz, compare values by
- * DMA). Two chains share the line: 39 above the keys, selected by PB0 low, and 15 in the
- * buttons, selected by PA7 low. The frame layout and bit timings are the stock firmware's. */
+ * DMA). Two chains share the line: 39 LEDs selected by PB0 low (their panel positions are not
+ * mapped; a 32-key unit has no lights above its keys) and 15 in the buttons, selected by PA7
+ * low. The frame layout and bit timings are the stock firmware's. */
 #include "board.h"
 
 #define CHAIN0 39

@@ -672,65 +672,73 @@ static void test_record_controllers(void) {
  * pass, other amounts after Dice, nothing at Spice 0, and in proportion to Spice. */
 static void test_spice(void) {
     int before = failures;
-    int at_full[8][2], at_half[8][2];
-    for (int round = 0; round < 3; round++) {
+    for (int round = 0; round < 12; round++) {          /* what plays is what the three amounts say, pass after pass */
         setup();
-        pa.track[0].length = 8;
-        pa.track[0].spice = (uint8_t)(round == 0 ? 0 : round == 1 ? 100 : 50);
+        mk_track *tr = &pa.track[0];
+        tr->length = 8;
+        tr->spice = (uint8_t)(round == 0 ? 0 : round < 4 ? 50 : 100);
+        tr->dice = (uint8_t)(round * 37);
         for (int s = 0; s < 8; s++) set_note(&pa, 0, s, (uint8_t)(60 + s));
         mk_engine_start();
         run(2 * 8 * 24);
-        int n = 0;
-        for (int i = 0; i < logged; i++) {
-            if (log_[i].kind != ON) continue;
-            int off = -1;
-            for (int j = i + 1; j < logged && off < 0; j++)
-                if (log_[j].kind == OFF && log_[j].a == log_[i].a) off = (int)(log_[j].tick - log_[i].tick);
-            int step = n % 8, velocity = log_[i].b;
-            CHECK_EQ(log_[i].tick, (uint32_t)n * 24);   /* Spice never moves a step in time */
-            if (round == 0) {
-                CHECK_EQ(velocity, 100);
-                CHECK_EQ(off, 12);
-            } else if (n < 8) {
-                (round == 1 ? at_full : at_half)[step][0] = velocity;
-                (round == 1 ? at_full : at_half)[step][1] = off;
-            } else {                                    /* the second pass: the same again */
-                CHECK_EQ(velocity, (round == 1 ? at_full : at_half)[step][0]);
-                CHECK_EQ(off, (round == 1 ? at_full : at_half)[step][1]);
-            }
-            n++;
+        int at = 0;
+        for (int n = 0; n < 16; n++) {
+            int step = n % 8, percent = mk_spice_gate(tr, step, 50);
+            if (round == 0) CHECK_EQ(percent, 50);
+            if (!percent) continue;                     /* left out */
+            while (at < logged && log_[at].kind != ON) at++;
+            CHECK(at < logged);
+            if (at >= logged) break;
+            int off = -1, ticks = 24 * percent / 100;
+            for (int j = at + 1; j < logged && off < 0; j++)
+                if (log_[j].kind == OFF && log_[j].a == log_[at].a) off = (int)(log_[j].tick - log_[at].tick);
+            CHECK_EQ(log_[at].tick, (uint32_t)n * 24);  /* Spice never moves a step in time */
+            CHECK_EQ(log_[at].a, 60 + step + mk_spice_octave(tr, step));
+            CHECK_EQ(log_[at].b, mk_spice_velocity(tr, step, 100));
+            CHECK_EQ(off, ticks < 1 ? 1 : ticks);
+            at++;
         }
-        CHECK_EQ(n, 16);
+        for (; at < logged; at++) CHECK(log_[at].kind != ON);   /* and nothing else */
         CHECK_EQ(doubled, 0);
         CHECK_EQ(unmatched, 0);
     }
-    int low = 127, high = 0, shortest = 999, longest = 0, differ = 0;
-    for (int s = 0; s < 8; s++) {
-        if (at_full[s][0] < low) low = at_full[s][0];
-        if (at_full[s][0] > high) high = at_full[s][0];
-        if (at_full[s][1] < shortest) shortest = at_full[s][1];
-        if (at_full[s][1] > longest) longest = at_full[s][1];
-        CHECK(at_full[s][0] >= 76 && at_full[s][0] <= 124);             /* 100 +- 24 */
-        CHECK(at_full[s][1] >= 1 && at_full[s][1] <= 24);               /* never past its step */
-        int half = at_half[s][0] - 100, full = at_full[s][0] - 100;
-        CHECK(half * 2 >= full - 2 && half * 2 <= full + 2);            /* half the Spice, half the way */
-        differ += at_full[s][0] != 100;
-    }
-    CHECK(high - low >= 12 && longest - shortest >= 6 && differ >= 6);  /* it does vary */
     mk_track dealt = pa.track[0];
-    dealt.spice = 100;
-    int same = 0;
-    for (int s = 0; s < 8; s++) {
-        dealt.dice = 0;
-        int was = mk_spice_velocity(&dealt, s, 100);
-        dealt.dice = 1;
-        same += was == mk_spice_velocity(&dealt, s, 100);
+    long dropped = 0, octaves = 0, long_gates = 0, steps = 0, same = 0, quiet_drops = 0;
+    for (int dice = 0; dice < 256; dice++) {
+        dealt.dice = (uint8_t)dice;
+        for (int s = 0; s < 64; s++, steps++) {
+            dealt.spice = 100;
+            int full = mk_spice_velocity(&dealt, s, 64) - 64, gate = mk_spice_gate(&dealt, s, 50);
+            CHECK(full >= -32 && full <= 32 && gate >= 0 && gate <= 98);        /* 32 either way */
+            CHECK(mk_spice_velocity(&dealt, s, 127) >= 95 && mk_spice_velocity(&dealt, s, 1) <= 33);    /* turned back at the ends */
+            dropped += !gate;
+            long_gates += gate > 50;
+            octaves += mk_spice_octave(&dealt, s) != 0;
+            CHECK_EQ(mk_spice_gate(&dealt, s + 64, 50), gate);                  /* 64 steps of amounts, then round again */
+            dealt.spice = 50;
+            int half = mk_spice_velocity(&dealt, s, 64) - 64;
+            CHECK(half * 2 >= full - 2 && half * 2 <= full + 2);                /* half the Spice, half the way */
+            dealt.spice = 20;
+            quiet_drops += !mk_spice_gate(&dealt, s, 50);
+            dealt.spice = 100;
+            dealt.dice = (uint8_t)(dice + 1);
+            same += mk_spice_velocity(&dealt, s, 64) - 64 == full;
+            dealt.dice = (uint8_t)dice;
+        }
     }
-    CHECK(same <= 2);                                   /* Dice: other amounts */
+    CHECK(dropped * 100 / steps >= 8 && dropped * 100 / steps <= 30);   /* at full Spice some steps are left out, */
+    CHECK(octaves * 100 / steps >= 5 && octaves * 100 / steps <= 30);   /* some play an octave away, */
+    CHECK(long_gates * 100 / steps >= 20);                              /* and gates run long as well as short */
+    CHECK_EQ(quiet_drops, 0);                                           /* a little Spice leaves every step in */
+    CHECK(same * 100 / steps <= 10);                                    /* Dice: other amounts */
+    dealt.spice = 0;
+    CHECK_EQ(mk_spice_octave(&dealt, 3), 0);
+    CHECK_EQ(mk_spice_gate(&dealt, 3, 37), 37);
     dealt.spice = 255;                                  /* out of range reads as 100 */
-    CHECK(mk_spice_velocity(&dealt, 0, 100) >= 76 && mk_spice_gate(&dealt, 0, 12, 24) >= 1);
-    CHECK_EQ(mk_spice_gate(&dealt, 3, 12, 5) <= 5, 1);
-    ok("Spice: fixed amounts per step, in proportion, the same each pass, new with the dice", before);
+    CHECK(mk_spice_velocity(&dealt, 0, 100) >= 68 && mk_spice_gate(&dealt, 0, 100) <= 98);
+    printf("   at full Spice, of %ld steps: %ld%% left out, %ld%% an octave away\n", steps, dropped * 100 / steps,
+           octaves * 100 / steps);
+    ok("Spice: the stock rule - fixed amounts per step, in proportion, the same each pass, new with the dice", before);
 }
 
 static void test_switch(void) {

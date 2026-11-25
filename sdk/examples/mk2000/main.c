@@ -598,29 +598,43 @@ void app_undo(void) {
     app_message("Undo");
 }
 
-/* Mutate, as in the stock firmware: every press is a new variation of the track as it was before
- * the first one, and the reset brings that back. Saving keeps the variation; loading, reloading
- * or changing pattern forgets there was one. */
-void app_mutate(void) {
+/* Mutate, as in the stock firmware: the variation is made when the button is let go, and how
+ * long it was held says how far it goes (mk_mutate_amount). Every one is a variation of the
+ * track as it was before the first, and the reset brings that back. Let go at amount 0, the
+ * variation playing becomes the track. Saving keeps the variation too; loading, reloading or
+ * changing pattern forgets there was one. */
+void app_mutate_begin(void) {
+    const mk_track *track = mutated >> app.track & 1 ? &originals[app.track] : &mk_engine_pattern()->track[app.track];
+    if (!mk_track_used(track)) {
+        app_message("Track is empty");
+        return;
+    }
+    app.message = 0;
+    app.mutate_at = ks_millis() | 1;
+    app.redraw = 1;
+}
+
+void app_mutate(int amount) {
     static mk_track work;
     mk_track *track = &mk_engine_pattern()->track[app.track];
+    if (!amount) {
+        if (mutated >> app.track & 1) app_message("Variation Kept");
+        mutated &= (uint8_t)~(1 << app.track);
+        return;
+    }
     uint32_t state = app_lock();
     if (!(mutated >> app.track & 1)) memcpy(&originals[app.track], track, sizeof *track);
     memcpy(&work, track, sizeof work);
     app_unlock(state);
-    if (!mk_track_used(&originals[app.track])) {
-        app_message("Track is empty");
-        return;
-    }
+    if (!mk_track_used(&originals[app.track])) return;
     mutated |= (uint8_t)(1 << app.track);
-    mk_mutate(&work, &originals[app.track], engine_random);
+    mk_mutate(&work, &originals[app.track], amount, engine_random);
     state = app_lock();
     memcpy(track->step, work.step, sizeof track->step);
     app_unlock(state);
     mk_engine_edited(app.track);
     app.dirty = 1;
-    app.message = 0;
-    app.mutate_at = ks_millis() | 1;                    /* the helix while it is held, then the message */
+    app_message("Track Mutated");
 }
 
 void app_mutate_reset(void) {
@@ -717,8 +731,8 @@ int main(void) {
         if (app.slot / 16 != app.chain_bank) chain_load(app.slot / 16);
         if (app.chain_dirty && !mk_engine_playing() && pages_active() != PAGE_CHAIN) app_chain_save();
         if (app.mutate_at && !(ks_buttons() & KS_BTN_MUTATE)) {
+            app_mutate(mk_mutate_amount(now - app.mutate_at));
             app.mutate_at = 0;
-            app_message("Track Mutated");
         }
         if (app.redraw || ((mk_engine_playing() || app_counting() || app.mutate_at) && now - last_draw >= 40)) {
             app.redraw = 0;

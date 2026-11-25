@@ -20,8 +20,8 @@ the emulator ([HARDWARE.md](HARDWARE.md), "The SDK's area across versions").
 ## 1.0.2 to 1.0.4
 
 - **Functions:** 2570 in 1.0.2, 2583 in 1.0.4. 187 runs of functions differ, 12 were added and 12
-  removed. Many of the differing ones are the same code with shifted jump targets; they have not
-  been gone through one by one. The full list is in `ghidra/out/diff-1.0.2-1.0.4.txt` after running
+  removed. Many of the differing ones are the same code with shifted jump targets; they are not
+  reviewed one by one. The full list is in `ghidra/out/diff-1.0.2-1.0.4.txt` after running
   the pipeline.
 - **SysEx:** the same 14 operation codes. Pattern parameter groups and their sizes are unchanged.
   The global group `0x6000` grows from 12 settings to 24.
@@ -34,9 +34,10 @@ Text present in a later image and absent from the one before. It shows where fea
 
 | Version | Added | Removed |
 |---------|-------|---------|
-| 1.0.3 | `CC Bank A` to `CC Bank D`, `Bank`, `Knob 1` to `Knob 4`, `Fixed 32`, `Fixed 64`, `Fixed 100`, `Fixed 127`, `Long Press: Edit`, `Setting Updated` | `Knob1 CC` to `Knob4 CC`, `Fixed` |
-| 1.0.4 | `MIDI Thru`, `F.Leg`, `F.Trg`, `S.Leg`, `S.Trg` | |
+| 1.0.3 | `CC Bank A` to `CC Bank D`, `Bank`, `Knob 1` to `Knob 4`, `Fixed 32`, `Fixed 64`, `Fixed 100`, `Fixed 127`, `Long Press: Edit`, `Setting Updated` | `Knob1 CC` to `Knob4 CC`, `CC1` to `CC4`, `Fixed` |
+| 1.0.4 | `MIDI Thru`, `F.Leg`, `F.Trg`, `Free`, `S.Leg`, `S.Trg` | |
 
 Read as: 1.0.3 adds banks of knob CC assignments (the knobs exist on the KeyStep 37 mk2) and a
-choice of fixed velocities; 1.0.4 adds a MIDI Thru setting and four gate or trigger modes. These
-are inferences from the strings; Arturia's release notes were not consulted.
+choice of fixed velocities; 1.0.4 adds a MIDI Thru setting and gate or trigger modes (`Free`
+sits between `F.Trg` and `S.Leg` in the image, next to the existing `Sync`). These are inferences
+from the strings; Arturia publishes no release notes for these versions (see above).

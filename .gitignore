@@ -11,3 +11,8 @@ firmware/*.ks2fw
 firmware/*/*.bin
 # Read from a unit: Arturia code and per-unit data
 firmware/device/
+# Output of recipes run in the repository root: dumps, reports, screenshots
+/*.bin
+/*.syx
+/*.png
+/report.json

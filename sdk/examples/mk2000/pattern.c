@@ -29,28 +29,49 @@ void mk_pattern_init(mk_pattern *pattern) {
 
 int mk_step_used(const mk_step *step) { return step->note[0] != 0; }
 
-/* A number that depends on the dice, the step and which of the two amounts it is for, well mixed. */
-static uint32_t spice_number(const mk_track *track, int step, uint32_t which) {
-    uint32_t x = (track->dice + 1u) * 0x9E3779B1u ^ (uint32_t)(step + 1) * 0x85EBCA6Bu ^ which * 0xC2B2AE35u;
-    x ^= x >> 15;
-    x *= 0x2C1B3C6Du;
-    x ^= x >> 12;
-    x *= 0x297A2D39u;
-    return x ^ x >> 15;
+/* Spice, by the stock firmware's rule (1.0.2, read from its code: docs/STOCK-UI.md, Gate, Spice
+ * and Dice). The dice are a seed; from it come two numbers from 0 to 128 for each of 64 steps,
+ * four steps to a turn of the generator, and the three amounts below are made from those two and
+ * the Spice setting. So a step's amounts are the same on every pass and in proportion to Spice.
+ * The stock firmware keeps a 16-bit seed in the pattern; here the track's dice byte is spread
+ * over 16 bits. */
+static void spice_numbers(const mk_track *track, int step, int *one, int *two) {
+    static const uint8_t first[4] = { 8, 16, 4, 20 }, second[4] = { 22, 18, 10, 6 };
+    uint32_t state = (uint32_t)(int32_t)(int16_t)((track->dice + 1u) * 0x9E37u);
+    step &= 63;
+    for (int turn = 0; turn <= step / 4; turn++) state = state * 0x0BB38435u + 0x3619636Bu;
+    int a = 255 * (int8_t)(state >> first[step % 4]) >> 8, b = 255 * (int8_t)(state >> second[step % 4]) >> 8;
+    *one = a < 0 ? -a : a;
+    *two = b < 0 ? -b : b;
 }
 
-static int spice_of(const mk_track *track) { return track->spice > 100 ? 100 : track->spice; }
+static int spice_of(const mk_track *track) { return (track->spice > 100 ? 100 : track->spice) * 255 / 100; }
+
+int mk_spice_octave(const mk_track *track, int step) {
+    int one, two, spice = spice_of(track);
+    if (!spice) return 0;
+    spice_numbers(track, step, &one, &two);
+    return two * 6 < one * spice >> 8 ? 12 : one * 7 < spice * two >> 8 ? -12 : 0;
+}
 
 int mk_spice_velocity(const mk_track *track, int step, int velocity) {
-    int amount = (int)(spice_number(track, step, 1) % 201) - 100;      /* -100 to 100 */
-    velocity += spice_of(track) * amount * 24 / 10000;
-    return velocity < 1 ? 1 : velocity > 127 ? 127 : velocity;
+    int one, two;
+    spice_numbers(track, step, &one, &two);
+    int twice = 2 * velocity + ((two - 64) * spice_of(track) >> 8);
+    twice = twice < 0 ? -twice : twice > 255 ? 510 - twice : twice;
+    return twice < 2 ? 1 : twice >> 1;
 }
 
-int mk_spice_gate(const mk_track *track, int step, int ticks, int most) {
-    int amount = (int)(spice_number(track, step, 2) % 306) - 85;       /* -85 to 220 per cent */
-    ticks = ticks * (10000 + spice_of(track) * amount) / 10000;
-    return ticks < 1 ? 1 : ticks > most ? most : ticks;
+int mk_spice_gate(const mk_track *track, int step, int percent) {
+    int one, two, spice = spice_of(track);
+    if (!spice) return percent;
+    spice_numbers(track, step, &one, &two);
+    int level = 46 + (percent - 1) * 162 / 98;          /* the stock firmware's scale: 46 is no gate, 208 all of the step */
+    if (level > 207) level = 207;
+    level = ((256 - spice) * level >> 8) + (spice * one >> 7);
+    if (level > 255) level = 510 - level;
+    if (level <= 46) return 0;
+    return level >= 208 ? 50 : (level - 46) * 98 / 162 + 1;
 }
 
 int mk_track_used(const mk_track *track) {

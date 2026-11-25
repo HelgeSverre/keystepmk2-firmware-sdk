@@ -7,7 +7,8 @@
 
 The message format is described at the top of sdk/examples/flashdump/main.c. Every data message
 carries a CRC-16 and the stream ends with a CRC-32 of the whole chip; an image is written only
-if all of it arrived and both checks pass.
+if all of it arrived and both checks pass. sdk/examples/bootdump sends the processor's first
+32 KiB, the bootloader, in the same format.
 """
 
 from __future__ import annotations

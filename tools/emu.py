@@ -10,8 +10,10 @@ docs/HARDWARE.md says where each fact comes from. tools/panel.py puts a window o
     uv run --with unicorn tools/emu.py image.bin --ms 3000 --script "1500 press=b3; 1700 release=b3"
 
 Script actions, each after a time in ms: press=<control>, release=<control>, tap=<control>,
-turn=<detents>, show (print the display), leds. Controls: a name from BUTTONS, tempo, b0..b15
-(button shift-register bits) or k0..k31 (keys).
+turn=<detents>, knob1..knob4=<detents> (the 37-key model's knobs), aftertouch=<level> and
+pedal=<level> (0-4095), clock= and run= (the sync input: 1, 0, or none to unplug), cv (print the
+CV, gate and sync outputs), show (print the display), leds. Controls: a name from BUTTONS, tempo,
+b0..b15 (button shift-register bits) or k0..k31 (keys; k0..k36 with --keys37).
 """
 
 from __future__ import annotations
@@ -99,8 +101,9 @@ TIMER_IRQ = {
 TIMER_CLOCK_MHZ = 64
 
 # Button shift-register bit for each front-panel control, found by pressing each bit in the
-# emulator and reading the display (docs/HARDWARE.md, "Buttons"). Bits 7, 8 and 15 do nothing on
-# the 32-key model. Tempo is not on the shift register: it is wired to PA15, active high.
+# emulator and reading the display (docs/HARDWARE.md, "Control map from emulation"), and confirmed
+# on a 32-key unit by the self-test (docs/SELFTEST.md). Bits 7, 8 and 15 do nothing on the 32-key
+# model. Tempo is not on the shift register: it is wired to PA15, active high.
 BUTTONS: dict[str, int] = {
     "mutate": 0, "arp": 1, "seq": 2, "shift": 3, "hold": 4, "oct+": 5, "oct-": 6,
     "encoder": 9, "back": 10, "play": 11, "stop": 12, "record": 13, "chord": 14,
@@ -234,7 +237,7 @@ class I2c:
 
 
 class NorFlash:
-    """The 512 KiB SPI flash on SPI2 (chip select PA8). Answers as a GD25Q40: id C8 40 13.
+    """The 512 KiB SPI flash on SPI2 (chip select PA8). Answers with id C8 40 13, the chip on the unit read.
 
     A page program keeps it busy for 0.7 ms and an erase for 45 ms (4 KiB), 150 ms (32 KiB) or
     250 ms (64 KiB), about what the part's data sheet gives as typical, on `clock` (microseconds)."""
@@ -436,7 +439,7 @@ class Board:
         self.dma_due: dict[int, float] = {}  # transfers in flight: when each completes
         self.dma_seen: dict[int, str] = {}
         self.tim2_count = 0  # TIM2 while it counts TIM3's overflows instead of the clock
-        self.adc = [0, 0]  # 12-bit levels at the aftertouch strip (channel 0) and the pedal socket (1)
+        self.adc = [0, 0]  # 12-bit levels at the aftertouch sensor (channel 0) and the pedal socket (1)
         self.sync_in: list[bool | None] = [None, None]  # clock, run: driven by a cable, or None
         self.usb = usbmodel.Usb(self)
 
@@ -611,7 +614,7 @@ class Board:
                         level &= ~(3 << shift) | self.encoders[knob].phases() << shift
             if self.touch_pending:
                 level &= ~0x40
-        elif port == GPIOA:  # sync inputs follow the sync outputs when no cable is plugged in
+        elif port == GPIOA:  # with no cable the sync inputs follow the outputs (on a unit they do not: SELFTEST.md)
             c_out = self.gpio_out[GPIOC]
             level = level & ~0xC | (c_out >> 3 & 1) << 2 | (c_out & 1) << 3
             for bit, active in zip((2, 3), self.sync_in, strict=True):  # a cable: active pulls the pin low

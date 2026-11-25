@@ -1,6 +1,6 @@
 # Self-test
 
-`sdk/examples/selftest` is a firmware that exercises every part of the SDK on a unit. It shows
+`sdk/examples/selftest` is a firmware that exercises the SDK's drivers on a unit. It shows
 OK, FAIL or SKIP per check on the display, tells the person at the unit what to do, and sends
 every result with its measured numbers to the computer over USB MIDI, where `tools/selftest.py`
 prints and saves them.
@@ -15,13 +15,13 @@ Three runs on one 32-key unit. The last: 32 OK, 0 FAIL, 5 SKIP, 2 INFO.
 | Checks | Result |
 |---|---|
 | 1–5: USB, `ks_millis`, `ks_micros`, the timer, flash id and reads | OK. Flash id `C8 40 13`; the stock file system was found |
-| 6, 7: flash write, `ks_store` | SKIP in every run: MK2000 had used every sector of the SDK's area, so none was blank. These two have never run on a unit |
+| 6, 7: flash write, `ks_store` | SKIP in every run: none of the 31 sectors of the SDK's area was blank (MK2000 had saved there). These two have never run on a unit |
 | 8: sync loop | SKIP in every run: eight pulses sent with the jack empty, none counted. The emulator's model of an empty jack does not hold on the unit; sync out and in remain untested |
 | 9, 10: rest levels | Aftertouch 0 to 5; pedal socket 4087 to 4095 with nothing plugged in |
 | 11: strips at rest | OK, the touch controller answers |
 | 12–16: display, lights | OK, as judged by the person |
 | 17–30: buttons | OK, all 14. (One FAIL in the first run was the wrong button pressed) |
-| 31: encoder | OK, 4 right and 4 left |
+| 31: encoder | OK, 5 right and 4 left (the check wants at least 4 each way) |
 | 32: keys | OK, all 32 in order. Velocities from 1 to 93: 127 was not reached by hand |
 | 33, 34: strips | OK, 0 to 255 each |
 | 35: aftertouch | OK: from 2 at rest to 3279 |
@@ -30,10 +30,11 @@ Three runs on one 32-key unit. The last: 32 OK, 0 FAIL, 5 SKIP, 2 INFO.
 | 39: USB in | OK |
 | Clock | The unit counted +10 ppm against the computer over 27 minutes |
 
-The first two runs failed checks 35 and 36: the SDK read aftertouch and the pedal from each
-other's inputs. The stock firmware's code confirmed it ([HARDWARE.md](HARDWARE.md), Pedal), the
-driver was corrected, and the third run passed both. The first run also printed a clock error
-of +57 %: the tool paired pings with the wrong answers once their numbers repeated. Fixed.
+Runs 1 and 2 failed check 35, and run 2 also 36 (run 1 timed out on the pedal question): the SDK
+read aftertouch and the pedal from each other's inputs. The stock firmware's code confirms it
+([HARDWARE.md](HARDWARE.md), Pedal); the driver is corrected, and run 3 passed both. Run 1 also
+printed a clock error of +57 %: the tool paired pings with the wrong answers once their numbers
+repeated. Fixed.
 
 ## Run it on a unit
 
@@ -47,11 +48,12 @@ minute for the port, then asks the unit to send again whatever it reported befor
 listening. It prints each result as it arrives, ends with a table when the run is over, and
 writes `report.json`. Ctrl-C ends it early and still prints and saves what came.
 
-A whole run takes about five minutes. Nothing needs to be plugged in besides USB; three
-optional checks want a pedal, a MIDI cable and a voltmeter.
+On the unit the automatic part took 4 s and the guided part 1.5 to 2.5 minutes, with the MIDI
+and CV checks declined. Nothing needs to be plugged in besides USB; three optional checks want a
+pedal, a MIDI cable and a voltmeter.
 
-Before flashing: the automatic part puts eight pulses on the sync output and the CV check puts
-voltages on the CV and gate sockets, so unplug gear that would mind.
+Before flashing: the automatic part puts eight pulses on the sync clock output and one on the run
+line, and the CV check puts voltages on the CV and gate sockets, so unplug gear that would mind.
 
 To go back to another firmware, flash it the usual way ([FLASHING.md](FLASHING.md)); the
 self-test honours the update request like every SDK firmware.
@@ -62,8 +64,8 @@ self-test honours the update request like every SDK firmware.
    ends on a screen like `Auto: OK 9  FAIL 0 / SKIP 0  INFO 2`.
 2. **Press Play** to start the guided part.
 3. **Do what each screen says.** The top line is the check's number and name and a countdown
-   in seconds. After each check the display shows OK, FAIL or SKIP large, with a reason below a
-   FAIL.
+   in seconds. After each check the display shows OK, FAIL or SKIP large, with the reason below
+   it.
 4. At the end the screen reads `Done: OK … FAIL … / SKIP … INFO …`.
 
 The answers are the same everywhere:
@@ -87,8 +89,9 @@ the knob shows for it are everything there is.
 
 ## The checks
 
-The number is the check's id in the report and on the display. *auto* needs no hands, *guided*
-needs the person, *optional* begins with a question and is skipped with Stop.
+The number is the check's id in the report and on the display. *Automatic* needs no hands,
+*guided* needs the person, *optional* (36–38) begins with a question and is skipped with Stop;
+39 is listed with the optional ones and asks nothing.
 
 ### Automatic
 
@@ -98,8 +101,8 @@ needs the person, *optional* begins with a question and is skipped with Stop.
 | 2 | `time.millis` | Counts 500 ms on `ks_millis` and measures them with `ks_micros`; measures `ks_delay_ms(100)`; compares `ks_micros16` with `ks_micros`. | 499–501 ms, 98.5–100.5 ms, and the two counters under 0.5 ms apart. |
 | 3 | `time.timer` | `ks_timer_start` at 1000 µs for 200 ms, `ks_timer_period` to 250 µs for 100 ms, then `ks_timer_stop`; counts the callback's ticks. | Each count fits its measured time within three periods, and no tick after the stop. |
 | 4 | `flash.id` | Reads the chip's JEDEC id. | `C8 40 13` or `1F 84 01`, the two the stock firmware accepts. |
-| 5 | `flash.read` | Reads the SDK's area (31 sectors) and counts the blank ones; reads the settings sector and the first two sectors of the stock file system twice. | The two reads agree and the name `littlefs` is where the stock firmware's file system has it. INFO if there is no such name (a chip the stock firmware never ran on): the read cannot prove itself then. FAIL if the two reads differ. |
-| 6 | `flash.write` | In the highest sector of the SDK's area that reads entirely `FF`: writes 300 bytes across two page ends, reads them back, erases the sector, reads it blank. | All of that. SKIP with no blank sector or an unknown chip. |
+| 5 | `flash.read` | Reads the SDK's area (31 sectors) and counts the blank ones; reads the settings sector and the first two sectors of the stock file system twice. | The two reads agree and the name `littlefs` is found in those two file-system sectors. INFO if there is no such name (a chip the stock firmware never ran on): the read cannot prove itself then. FAIL if the two reads differ. |
+| 6 | `flash.write` | In the highest sector of the SDK's area that reads entirely `FF`: writes 300 bytes from offset 200, across a page end, reads them back, erases the sector, reads it blank. | All of that. SKIP with no blank sector or an unknown chip. |
 | 7 | `flash.store` | In the same sector: `ks_store_save`, `ks_store_load`, erase, and a load that must now find nothing. | All of that. SKIP unless check 6 passed. |
 | 8 | `sync.loop` | Eight 5 ms pulses on the sync clock output and one on the run line, with nothing in the sync socket. Counts them with `ks_sync_pulses`, the `ks_sync_clock_in` hook and `ks_sync_in`. | All eight clock pulses arrive each way. SKIP if none arrives at all; FAIL if some do. The run line is reported (`run_followed`) and not judged. |
 | 9 | `aftertouch.rest` | 250 readings of `ks_aftertouch` over a second with nothing pressed. | Never OK: INFO with the numbers. FAIL for a value outside 0–4095, or if the converter did not run meanwhile. |
@@ -115,9 +118,9 @@ write.
 What the automatic part cannot know: check 8 passing with nothing plugged in rests on the
 emulator's model, in which an empty sync socket reads the unit's own output
 ([MK2000.md](MK2000.md), Sync and routing). On the unit it was a SKIP with the socket empty, so
-that model is wrong for the hardware; a patch cable from sync out to sync in would be needed,
-and that has not been tried. Check 11 catches a phantom touch,
-but a touch controller that never answers also reads "no finger"; checks 33 and 34 settle that.
+that model is wrong for the hardware. A loop on the unit needs a cable from sync out to sync in;
+not tried. Check 11 catches a phantom touch, but a touch controller that never answers also reads
+"no finger"; checks 33 and 34 settle that.
 
 ### Guided
 
@@ -192,7 +195,7 @@ is not known: write down what the meter shows at each step.
 | `leds.*` | `colour` sent, `0xRRGGBB`. |
 | `button.*` | `expected` and `seen` as `KS_BTN_` bits; `held_before`, buttons already down when the check began (a stuck one shows here). |
 | `encoder` | `right`, `left`: detents counted in each half, clockwise positive, so 4 and −4 when right. |
-| `keys` | `fired` and `released`: one bit per key, bit 0 the lowest; `misordered`; `velocity_min`, `velocity_max` over every strike (1–127); `repeats`, strikes of the key just struck (bounce, or a second try). |
+| `keys` | `fired` and `released`: one bit per key, bit 0 the lowest (all 32 set prints as −1); `misordered`; `velocity_min`, `velocity_max` over every strike (1–127); `repeats`, strikes of the key just struck (bounce, or a second try). |
 | `strip.*` | `min`, `max`, `first`, `last` of the last slide, 0 (bottom) to 255 (top), −1 if never touched; `released`; `other_strip_touched`. |
 | `aftertouch` | `rest` from check 9; `peak`, the reading farthest from it; `direction` +1 if pressing raises the level, −1 if it lowers it; `min`, `max` while a key was down; `threshold`. |
 | `pedal` | `rest` from check 10 (pedal unplugged, usually); `start` when the check began; `min`, `max`. |
@@ -206,7 +209,7 @@ While it listens, `selftest.py` pings the unit every two seconds and gets the un
 From the first and last ping that came straight back it prints how long the unit and the
 computer each think the run took, and the difference in parts per million; `report.json` has it
 under `clock`. This is the only measurement of the unit's clock against anything outside the
-unit. It is good to about 100 ppm over a minute, better over a longer run.
+unit. It is good to about 100 ppm over a minute, and better over a longer run.
 
 ## The report format
 
@@ -232,11 +235,16 @@ just build selftest
 uv run --with unicorn tools/selftest_emu.py
 ```
 
-`selftest_emu.py` reads the instructions off the emulated display and does what they say. Three
-parts: everything done right (every check OK, the two rest levels INFO); a second run on the
-same board with mistakes and faults (wrong button, no button, two buttons, knob turned the
-wrong way, a dead key, a strip slid the wrong way, the wrong strip, no pressure, no MIDI cable,
-no blank flash sector, a plugged sync socket), which must give exactly the expected FAILs and
-SKIPs; and a start with no USB host, where the report must come out of the DIN socket.
+`selftest_emu.py` reads the instructions off the emulated display and does what they say. Four
+parts:
+
+| Part | What it does | Must give |
+|---|---|---|
+| `good` | Everything done right, on a chip image with the stock file system | 37 OK, 2 INFO (the rest levels) |
+| `bad` | A second run on the same board: Stop on the display and the red lights, wrong button, no button, two buttons, knob turned the wrong way, a dead key, a strip slid the wrong way, the wrong strip, no pressure, the pedal declined, no MIDI cable, Stop on the CV check, no blank flash sector, a plugged sync socket | Exactly 11 FAIL and 6 SKIP |
+| `din` | No USB host | The automatic part's report on the DIN socket |
+| `notouch` | A touch controller that does not answer | Check 11 FAIL |
+
+`uv run --with unicorn tools/selftest_emu.py good` runs only the parts named.
 
 `just host selftest` opens it in the KeyStep window to try by hand.

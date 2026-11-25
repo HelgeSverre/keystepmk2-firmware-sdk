@@ -2,7 +2,7 @@
  * written. The first 32 bytes of RAM are a block shared with it (the update-mode marker), so
  * nothing is placed there. Both facts are read from the stock firmware. */
 MEMORY {
-    FLASH (rx)  : ORIGIN = 0x08008000, LENGTH = 480K
+    FLASH (rx)  : ORIGIN = 0x08008000, LENGTH = 0x77800   /* to 0x0807F800: the bootloader writes its mark over the last page (docs/BOOTLOADER.md) */
     RAM   (rwx) : ORIGIN = 0x20000020, LENGTH = 144K - 0x20
 }
 _estack = 0x20024000;   /* the stock firmware's value */

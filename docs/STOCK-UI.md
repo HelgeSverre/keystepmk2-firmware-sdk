@@ -17,7 +17,7 @@ corrected by hand.
 | Arp (hold) | `Arp Settings` menu: `Arp Length`, `Arp Retrigger` (see Arp, chord and scale settings) | |
 | Tempo (tap) | `Tempo: 120.0 BPM` / `Long press: Settings` | |
 | Tempo (hold) | `Timing` menu, first entry `Tempo` | |
-| Tempo held + turn | `Tempo` / new value | Three detents moved 120.0 to 189.1 (accelerated) |
+| Tempo held + turn | `Tempo` / new value | Three detents moved 120.0 to 189.1 (accelerated). Re-measured 2026-11-25 with `emutest.turn` and with three detents 30 ms apart: 121.1 both times |
 | Chord (hold) | `Chord` menu: `Preset`, `Strum (ms)`, `Strum Type`, `Voicing` | |
 | Hold (hold 1.5 s) | `Transpose Hold` on release | Hold light on |
 | Mutate (press) | A new variation of the sequence; an animation while held (see Mutate) | Mutate light on |
@@ -167,16 +167,23 @@ Stock 1.0.2 in the emulator, DIN output, default settings.
 - **Mod strip**: `B0 01 xx` by position (`3F` in the middle, `7F` at the top); nothing when let
   go.
 - **Aftertouch** and **pedal**: nothing was sent for any level put on either ADC channel, with or
-  without a key down. Whether the emulator's model of the two inputs or a threshold in the
-  firmware is the reason is not known.
+  without a key down. Re-measured 2026-11-25 with aftertouch on channel 0 and the pedal on
+  channel 1 ([HARDWARE.md](HARDWARE.md)), the pedal input at full scale as on a unit with nothing
+  plugged in, aftertouch 0 to 4095 with a key held, the pedal 0 to 4095: still nothing. Whether
+  the emulator's model of the two inputs or a setting or threshold in the firmware is the reason
+  is not known.
 
 ## Mutate
 
 Stock 1.0.2 in the emulator, Seq mode, eight steps recorded: C4 D4 E4 F4 G4 A4 B4 C5.
 
 - Each press of Mutate replaces what the sequence plays with a variation, which then repeats
-  unchanged. While the button is held the display shows an animation; there is no menu, and
-  turning the encoder with it held changed nothing that was seen.
+  unchanged. While the button is held the display shows a double helix turning, and the Mutate
+  light goes round the colours from red; there is no menu, and turning the encoder with it held
+  changed nothing that was seen.
+- How long the button is held sets how far the variation goes (the rule is below). Of the eight
+  steps, a tap changed 6 or 7, a hold of 0.3 s changed 3, and a hold of 1.25 s changed 4 to 8
+  and in two of four tries left four longer notes in place of eight.
 - Shift + Mutate shows `Mutate Reset` and the original plays again.
 - Six presses in a row gave, per step (original `60 62 64 65 67 69 71 72`):
 
@@ -197,15 +204,54 @@ Stock 1.0.2 in the emulator, Seq mode, eight steps recorded: C4 D4 E4 F4 G4 A4 B
   other steps: 1 4 5 6 7, then 1 2 4 5 8, 1 3 5 6 8, 1 3 5 7 8.
 - The notes are the sequence's own, some an octave up or down (77, 81, 55, 52, 48 above).
 - `Dice Rolled`, `Clear Spice` and `Gate/Spice only in Seq/Arp mode` are in the firmware's
-  strings; touching the Mod strip shows a `Pitch | Mod` display. Spice, Dice and the strip
-  functions were not explored.
+  strings; touching the Mod strip shows a `Pitch | Mod` display.
+
+### The rule, read from the code
+
+Read from the 1.0.2 code, not run step by step. The hold-time effect above is the one part
+measured in the emulator.
+
+- **When.** The press [0x0804CC94] notes the time, starts the picture and deals new dice for
+  Spice. The variation is made when the button is let go [0x0804774C].
+- **Amount, 0 to 100.** Let go within 250 ms: 30 (a hidden setting's default). Held longer: from
+  0 up to 100 over one second, back to 0 over 0.67 s, and round again. The line along the bottom
+  of the picture is this amount. Let go at exactly 0, the variation playing becomes the pattern
+  and the light goes out.
+- **From the original.** The first Mutate keeps a copy of all 64 steps; every later one puts it
+  back first [0x08035024]. Shift + Mutate puts it back and stops there.
+- **Scale.** The Scale setting is not used. The pattern's own notes give a set of pitch classes
+  [0x0805DD24]: what every fitting transposition of eight built-in scales has in common, or the
+  notes themselves when none fits. Pitches move by members of that set ("degrees"). The root is
+  the commonest note, unless that is a third or fifth above the next commonest [0x0805DDF0].
+- **Operations.** A round runs amount / 20 + 1 of them (2 at a tap, 6 at 100), and a pattern of
+  16 steps or fewer gets four rounds [0x08034F68, 0x080339C0]. Each is one of seven, picked by a
+  random number, and covers a stretch of the pattern whose length grows with the amount:
+
+  | Operation | What it does |
+  |---|---|
+  | Transpose | A stretch moves up or down by up to 3 degrees |
+  | Invert | A stretch is mirrored about one degree |
+  | Block swap | Two groups of whole steps change places |
+  | Reverse | A stretch plays backwards |
+  | Harmony | A second note 2 to 4 degrees above the first; only if the pattern has chords |
+  | Run | A stretch becomes a run up, or down by twos, along the scale |
+  | Shift | A note moves into a rest next to it |
+
+  Block swap and Reverse are mostly turned down for a pattern with few notes; Run is mostly
+  turned down always.
+- **Afterwards.** A note more than an octave above the original's highest or below its lowest
+  comes back an octave [0x08034058].
+- **What stays.** Velocities travel with their steps; gates change only for harmony notes; a rest
+  stays a rest unless a note moves into it. That fits what was measured above.
+- **Seed.** A clock read at that moment [0x08035024]; it is not stored, so a variation cannot be
+  made again.
 
 ## CV settings
 
 Stock 1.0.2 in the emulator, blank calibration, each setting written over USB (`36 FB`, see
-SYSEX.md). A setting with a list of values is written as its index scaled to `0x7FFF`: index ×
-32767 / (values − 1); a small number such as 1 is read as the first value. All numbers are
-register values, not volts.
+[SYSEX.md](SYSEX.md)). A setting with a list of values is written as its index scaled to
+`0x7FFF`: index × 32767 / (values − 1); a small number such as 1 is read as the first value.
+All numbers are register values, not volts.
 
 - **Pitch Format VoltOct**: `(note − reference) × 65536 / 120`, never below 0. **Pitch Ref** C-2,
   C-1, C0, C1, C2, C3 puts the reference at note 0, 12, 24, 36, 48, 60. Notes 53, 60, 72, 84 at C1:
@@ -245,12 +291,46 @@ step), default settings.
   | the top | 80 to 124 | 6 to 122 ms |
 
   A step's change is in proportion to the strip: the step that gained 6 at a quarter gained 12 at
-  half and 24 at the top. Timing and notes did not change. Back at the bottom the steps play as
-  recorded.
+  half and 24 at the top. Timing did not change. Back at the bottom the steps play as recorded.
+- At the top of the strip some steps are left out and some play an octave away. Five patterns of
+  dice on the eight steps `60 62 64 65 67 69 71 72` gave:
+
+  | Dice | Notes played |
+  |---|---|
+  | 1 | 60 62 65 67 69 72 (two left out) |
+  | 2 | 62 65 67 69 72 (three left out) |
+  | 3 | 60 62 77 67 69 71 84 (two an octave up) |
+  | 4 | 60 62 64 65 69 71 72 (one left out) |
+  | 5 | 60 62 64 83 72 (three left out, one an octave up) |
+
+  Gates there ran from 2 ms to 121 ms, with many at exactly 62 ms.
 - **Dice**: with Shift held, three taps on the Mod strip within half a second of each other show
   `Dice Rolled` [0x0804F178 counts presses 501 ms apart, and on the third seeds a new random
   number]; the steps then vary by other amounts. Three taps without Shift, or on the Bend strip,
-  do nothing.
+  do nothing. A Mutate press deals new dice too [0x0804CC94].
+
+### The rule, read from the code
+
+Read from the 1.0.2 code; the measurements above fit it.
+
+- The dice are a 16-bit seed kept in the pattern (sequence setting 6, hidden in MIDI Control
+  Center). From it the firmware makes two numbers from 0 to 128 for each of 64 steps
+  [0x0805AB1C]. Spice changes what is played, never the pattern.
+- With Spice `S` from 0 to 255 and a step's two numbers `a` and `b` [0x0805A958]:
+
+  | Changed | Rule |
+  |---|---|
+  | Velocity | by `(b − 64) × S / 256` half-steps of velocity: at most 32 either way, turned back at 1 and 127 |
+  | Gate | from the Gate setting towards `2 × a`, on a scale where 46 is nothing and 208 the whole step |
+  | Left out | when that gate comes out at 46 or less |
+  | Half a step | when it comes out at 208 or more: the gate is 50 % (the 62 ms above) |
+  | Octave up | when `6 × b < a × S / 256` |
+  | Octave down | otherwise, when `7 × a < b × S / 256` |
+
+  At full Spice about one step in five is left out and one in seven plays an octave away. There
+  is no level at which these begin: they get likelier as Spice rises.
+- The Gate setting 10 to 91 gives 7 % to 56 % of the step by the same scale, which is the 8 ms to
+  69 ms measured above.
 - Also seen: Shift + Tempo shows `Seq Length`; the Shift + edit keys show `Time Div:`, `Nudge`,
   `Transpose`, `Pattern Doubled`, `Pattern Quantized`, `Pattern Reloaded`, `Pattern Cleared`,
   `Pattern Undo`.

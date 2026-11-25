@@ -129,7 +129,7 @@ void ks_reset(void) {
 /* What the stock firmware does when the host asks for update mode: a marker and its USB serial
  * number string (17 bytes with the terminator) in the RAM block shared with the bootloader,
  * then a reset. The bootloader reads the marker first and stays in update mode, with that serial
- * (docs/BOOTLOADER.md). tools/ksflash.py uses it on a unit for every flash. */
+ * (docs/BOOTLOADER.md). tools/ksflash.py uses it on a unit for every flash from a running firmware. */
 void ks_enter_update_mode(void) {
     volatile uint32_t *shared = (volatile uint32_t *)0x20000000;
     volatile uint8_t *text = (volatile uint8_t *)0x20000004;

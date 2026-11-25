@@ -1,4 +1,4 @@
-# KeyStep mk2 firmware research. Only the recipes in the device group talk to a device, and they only read.
+# KeyStep mk2 firmware research. Only the recipes in the device group talk to a device; all but flash and flash-stock only read.
 # Needs: uv; arm-none-eabi-gcc for the SDK; Ghidra 12 and a JDK for the analysis recipes.
 
 uv := "uv"
@@ -90,7 +90,7 @@ _image app:
            echo "sdk/build/{{ app }}/{{ app }}.img --flash sdk/build/{{ app }}/flash.bin" ;;
     esac
 
-# === Device (reads only) ===
+# === Device ===
 
 # Print the USB descriptors of a connected KeyStep: application or update mode
 [group('device')]
@@ -119,7 +119,7 @@ selftest-receive *args:
 
 # Receive a flash dump from the flashdump firmware over MIDI
 [group('device')]
-dump-receive out="flash.bin" *args:
+dump-receive out="firmware/device/extflash.bin" *args:
     {{ uv }} run --with mido --with python-rtmidi tools/flashdump.py receive -o {{ out }} {{ args }}
 
 # === Analysis ===

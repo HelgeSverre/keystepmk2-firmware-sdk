@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """A KeyStep mk2 on the screen: run a firmware image in a window that looks like the device.
 
-The window sits on tools/emu.py, so what runs is the real ARM image: the stock firmware today,
-SDK firmware later. Click the buttons and keys, turn the encoder, drag the touch strips. The
+The window sits on tools/emu.py, so what runs is the real ARM image: the stock firmware or an
+SDK firmware. Click the buttons and keys, turn the encoder, drag the touch strips. The
 strip under the device shows the display enlarged and the MIDI sent on the DIN output.
 
     uv run --with unicorn --with pygame-ce tools/panel.py firmware/keystep_mk2__1_0_2.ks2fw

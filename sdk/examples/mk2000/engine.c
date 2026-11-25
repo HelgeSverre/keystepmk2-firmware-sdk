@@ -172,8 +172,11 @@ static void count_down(void) {
 
 static int pitch_of(int t, uint8_t note) {
     if (!note || note > 127) return -1;
-    int pitch = note + pattern->track[t].shift + tracks[t].transposition;
-    return pitch < 0 || pitch > 127 ? -1 : pitch;
+    const mk_track *tr = &pattern->track[t];
+    int pitch = note + tr->shift + tracks[t].transposition;
+    if (pitch < 0 || pitch > 127) return -1;
+    if (tr->spice) pitch += mk_spice_octave(tr, tracks[t].cur);        /* Spice: the step an octave away, as far as there is room */
+    return pitch < 0 ? pitch + 12 : pitch > 127 ? pitch - 12 : pitch;
 }
 
 static int skipped(const track_state *s, uint8_t note) {
@@ -214,6 +217,11 @@ static int step_plays(const mk_step *st, uint32_t pass) {
 
 static int part_start(const track_state *s, int part) { return part * s->span / s->hits; }
 
+static int gate_percent(const mk_track *tr, const mk_step *st) {
+    int percent = st->gate ? st->gate : tr->gate;
+    return percent < 1 ? 1 : percent > 100 ? 100 : percent;
+}
+
 /* One ratchet part of step `cur`. A tied note of this track with a pitch the step plays carries
  * on into the first part instead of being struck again. */
 static void play_hit(int t) {
@@ -222,13 +230,11 @@ static void play_hit(int t) {
     const mk_step *st = &tr->step[s->cur];
     int part = s->hit++;
     if (!audible(t)) return;
-    int percent = st->gate ? st->gate : tr->gate;
-    if (percent < 1) percent = 1;
-    if (percent > 100) percent = 100;
+    int percent = gate_percent(tr, st);
+    if (tr->spice) percent = mk_spice_gate(tr, s->cur, percent);
     int whole = part_start(s, part + 1) - part_start(s, part);
     int gate = whole * percent / 100;
     if (gate < 1) gate = 1;
-    if (tr->spice) gate = mk_spice_gate(tr, s->cur, gate, whole < 1 ? 1 : whole);
     if (part == s->hits - 1 && (st->flags & MK_STEP_TIE)) gate = HOLD;
     uint8_t channel = tr->channel & 15;
     for (int i = 0; i < MK_POLY; i++) {
@@ -304,6 +310,7 @@ static void begin(int t, int pos, uint32_t count, uint32_t pass) {
     }
     send_controllers(t, st);
     if (!step_plays(st, pass)) return;
+    if (tr->spice && !mk_spice_gate(tr, pos, gate_percent(tr, st))) return;     /* Spice leaves this step out */
     for (int i = 0; i < NOTES; i++)
         if (notes[i].track == t && notes[i].left == HOLD && !sounds(t, notes[i].channel, notes[i].pitch))
             note_off(&notes[i]);

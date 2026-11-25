@@ -1,12 +1,13 @@
 # How MIDI Control Center installs firmware
 
-Static analysis only, 2026-11-23. MCC was not launched and nothing was sent to a device or to
-Arturia's servers. Claims are marked **verified** (read from the binary or from files on disk) or
-**inferred** (a conclusion drawn from verified facts, not seen directly).
+Written from static analysis, 2026-11-23: for that analysis MCC was not launched and nothing was
+sent to a device or to Arturia's servers. Claims are marked **verified** (read from the binary or
+from files on disk) or **inferred** (a conclusion drawn from verified facts, not seen directly).
+Rows that a unit has since answered say so and point at [BOOTLOADER.md](BOOTLOADER.md).
 
-Since this was written the update has been run on a unit, with MIDI Control Center and with
-`tools/ksflash.py` sending the sequence below, and the bootloader has been read: see
-[BOOTLOADER.md](BOOTLOADER.md), "Seen on a device" and "The bootloader, read". What MIDI Control
+Since then the update has been run on a unit, with MIDI Control Center and with
+`tools/ksflash.py` sending the sequence below, and the bootloader has been read
+([BOOTLOADER.md](BOOTLOADER.md), "Seen on a device" and "The bootloader, read"). What MIDI Control
 Center showed there: a unit entered with Tempo is listed as KeyStep mk2 despite its noise serial,
 its `Firmware Revision` field shows the bootloader's `bcdDevice` (`0x0200` as `0.2.0`), and it
 offers the latest version but takes a package chosen by hand.
@@ -132,9 +133,9 @@ Details that matter for a custom flasher:
 |------|----------|--------|
 | The whole file is sent, header included, from offset 0 | `seekg(0)` then sequential reads in `0x101145880`; nothing between `fopen` and the first `DNLOAD` inspects the data | verified |
 | Block size is the device's `wTransferSize`, not a constant | `0x101145acf` | verified |
-| For the KeyStep mk2 that is probably 64 bytes: a 1.0.1 image (429,448 bytes) is 6,710 blocks of 64 plus a final block of 8 | The application's DFU functional descriptor in the image is `09 21 0B FF 00 40 00 10 01` (offset `0x6861E` in the 1.0.1 image). MCC reads the descriptor after the switch to DFU mode, and the bootloader's descriptor is not in the package | inferred |
+| For the KeyStep mk2 that is 64 bytes: a 1.0.1 or 1.0.2 image (429,448 bytes) is 6,710 blocks of 64 plus a final block of 8 | MCC reads the descriptor after the switch to DFU mode. The application's descriptor in the image is `09 21 0B FF 00 40 00 10 01` (offset `0x6861E` in the 1.0.1 image); the bootloader's, read on a unit, is `09 21 0B FF 00 40 00 1A 01`, also 64, and `ksflash.py` flashed 1.0.2 in 6711 blocks ([BOOTLOADER.md](BOOTLOADER.md)) | verified on a unit |
 | `bwPollTimeout` is ignored; MCC polls `GETSTATUS` with no delay | `0x1011452e0` uses only byte 0 (`bStatus`) and byte 4 (`bState`) of the reply | verified |
-| MCC does not wait for manifestation and does not issue a USB reset; the device is expected to restart on `0xF3` | Steps 4 and 6 above | verified for MCC's side; the device's behaviour is inferred |
+| MCC does not wait for manifestation and does not issue a USB reset; the device restarts on `0xF3` | Steps 4 and 6 above; the bootloader restarts by itself after `0xF3` when the download was complete and correct ([BOOTLOADER.md](BOOTLOADER.md), "The bootloader, read", 6) | verified for MCC's side; the device's side verified in its code and on a unit |
 | A final short block is sent short, not padded | `0x1011460e7` passes the remainder as `wLength` | verified |
 | The block counter is 16 bits and is not reset | `movzx ecx, r14w` | verified |
 
@@ -165,7 +166,7 @@ are the only way the bootloader's verdict on an image reaches the user.
 | A device is connected (matched by USB VID/PID). Otherwise "Device should be plugged before upgrading." | `0x1004837a0` | verified |
 | The chosen path exists, is not a directory, and its name matches `firmwareFilePattern` (`*.ks2fw`). Otherwise "Firmware files must fit this format: ..." | `0x10061fc80`, wildcard match `0x100f07ed0` | verified |
 | The user confirms a dialog ending "Click 'OK' when ready, or 'Cancel' to abort the firmware update." | `0x10061fc80` | verified |
-| MCC tries to open the device's MIDI ports. If that fails it logs "Can't open device with normal USB Ids. Maybe the device is already in bootloader mode." and asks the user to replug, with a retry counter | `0x10061fc80` (`0x100620e93`) | verified that the code exists; how it plays out for a KeyStep mk2 is not determined |
+| MCC tries to open the device's MIDI ports. If that fails it logs "Can't open device with normal USB Ids. Maybe the device is already in bootloader mode." and asks the user to replug, with a retry counter | `0x10061fc80` (`0x100620e93`) | verified that the code exists. On a unit entered with Tempo MCC showed `Error: Failed to open the device.` at start and still flashed it ([BOOTLOADER.md](BOOTLOADER.md)); whether that message comes from this check is not determined |
 | The package unzips into a temporary directory (`%%%%-%%%%-%%%%-%%%%`) and contains `info.json` that parses as JSON. Otherwise "Error while extracting the firware.", "Invalid JSON file." or "Invalid Firmware File" | `0x10045b840` | verified |
 | `method` is `"dfu"`. `"bulk"` is recognised and rejected with "Bulk update not implemented."; anything else gives "Invalid value "method" in JSON" | `0x10045bfe3`–`0x10045c0bc`, `0x1004599d8` | verified |
 | For each entry of `images`: `productid` (decimal, or hex with `0x` prefix; parser `0x10045d970`) must equal the device's PID or the entry is skipped. A missing `productid` falls back to a top-level `productid`, then to the device PID for four legacy products (`0x218`, `0x406`, `0x601`, `0x2218`), else "Invalid info.json in firmware package. Image productid unknown." | `0x10045c206`–`0x10045c388`, `0x10045bed0` | verified |
@@ -199,7 +200,7 @@ Brute strings).
 | The manual path (choose a file) compares no versions | `0x10061fc80` contains only the pattern and existence checks; `0x1004594e0` and `0x10045b840` never read `version_number` | verified |
 | The automatic path offers an update only when the device's version is lower than the latest known one, or lower than `minimalVersionRequired` (`1.0.0.0` for the KeyStep mk2) | `0x10048faa0`: comparison `0x1004ad0b0`, log strings "[Firmware Update] new update available", "Required update needed", "FW file found but outdated" | verified |
 | So MCC itself will send an older image if the user selects the file | Follows from the two rows above | inferred |
-| Whether the bootloader refuses an older version | Not visible in MCC | not determined |
+| Whether the bootloader refuses an older version | It does not read the header's version bytes ([BOOTLOADER.md](BOOTLOADER.md), "The bootloader, read", 2). Flashing a version older than the installed one was not tried on a unit | verified in the bootloader's code |
 
 ### After flashing
 
@@ -214,13 +215,13 @@ There are two separate mechanisms.
 
 | Mechanism | How it works | For the KeyStep mk2 | Status |
 |-----------|--------------|---------------------|--------|
-| Inside the DFU code | If the active configuration has one interface and it is the DFU one, the `0xF2` request is skipped and the download starts at once | Applies. This is the recovery path: a unit stuck in its bootloader can be flashed if MCC gets as far as starting the updater | verified for the code; inferred for the device |
+| Inside the DFU code | If the active configuration has one interface and it is the DFU one, the `0xF2` request is skipped and the download starts at once | Applies. This is the recovery path: update mode shows one `FE/01/02` interface, and MCC flashed a unit entered with Tempo (2026-11-24) | verified for the code and on a unit ([BOOTLOADER.md](BOOTLOADER.md), "Seen on a device") |
 | In the device list | A connected USB PID is looked up in each product's normal PID list, then in its updater PID list. A hit in the updater list alone sets the "bootloader" flag, and MCC shows "Device currently in bootloader mode. Please update firmware." and "Bootloader..." instead of synchronising | Does not apply: both lists hold `0x0228`, the normal list is searched first, so the flag is never set | verified (`0x1005c03f0`; flag copied to the device object at `0x10047efe8`; messages in `0x10047e840`) |
 
-Consequence (inferred): MCC cannot tell a KeyStep mk2 in DFU mode from one running its
-application by USB ids. Such a unit would be listed as connected, MCC would fail to read its
-firmware revision over MIDI ("Could not get firmware revision."), and the Firmware Upgrade dialog
-would still be reachable. Not confirmed on hardware.
+Consequence: MCC cannot tell a KeyStep mk2 in DFU mode from one running its application by USB
+ids. Seen on a unit in update mode (2026-11-24, [BOOTLOADER.md](BOOTLOADER.md)): MCC listed it as
+KeyStep mk2 with `Firmware Revision: 0.2.0`, the bootloader's `bcdDevice`, offered an update, and
+its firmware update ran from a package chosen by hand.
 
 The Firmware Upgrade dialog (`0x1006854c0`, class `mcc::FirmwareUpgradeWindow`) returns three
 results handled in `0x1004837a0`: 7 = install the latest version (downloading if needed), 5 =
@@ -237,9 +238,10 @@ offer the force mode is not determined.
 | The other `mfreak` products have an empty `userRebootMessage` or none (MicroLab mk3). Only the KeyStep Pro has a `postUpdateMessage`: "Please reboot your device, and press OK." | All eight JSON files that name `mfreak` | verified |
 | The binary holds no button-combination text for this family | String search for bootloader, update mode, reboot, "WHILE HOLDING". Every button instruction found lives in the JSON of an older product (KeyLab 25/49/61: Sound + Multi + Edit; MiniLab: Shift; KeyLab: Octave Up + Octave Down after the update) | verified |
 
-So MCC gives no hint of a power-on key combination for the KeyStep mk2. If one exists it is in the
-bootloader, which is not in the package. The only documented way into DFU mode is the `0xF2`
-request to the running application.
+So MCC gives no hint of a power-on key combination for the KeyStep mk2. The combination exists
+outside MCC: Arturia's support article says to hold Tempo while switching on, the bootloader reads
+PA15 (Tempo) at start, and it works on a unit ([BOOTLOADER.md](BOOTLOADER.md), "Entering update
+mode").
 
 ## 4. How MCC finds updates
 
@@ -253,7 +255,7 @@ MCC embeds Arturia's shared update manager (log tag `update_manager`).
 | `<type>` is `firmware` for device firmware | Global string initialised at `0x100742273`, stored as the product's type at `0x10048fe7c` | verified |
 | `<segment>` is `mcc`; a second request replaces it with `macARM` when the process runs translated | `0x1007306c0` (two calls of `0x10073b1a0`), `macARM` initialised at `0x1007422fa` | verified |
 | `<sku>` is the `sku` of the device definition, `keystep-mk2` | `KeyStep2.json`; the product record is built at `0x10048faa0` from the selected device | inferred |
-| Expected request for this Mac (Intel binary under Rosetta): `GET https://resources.arturia.net/api/resources/firmware/keystep-mk2/mcc/latest?architecture=ARM` | Assembled from the rows above | inferred, never sent |
+| Derived request for this Mac (Intel binary under Rosetta): `GET https://resources.arturia.net/api/resources/firmware/keystep-mk2/mcc/latest?architecture=ARM` | Assembled from the rows above | inferred, never sent |
 | The reply is JSON; fields read include `product_sku`, `name`, `permalink`, `version`, `links.product_page.href`, `links.product_resources.href`, `release_notes_html`, `platform_min_version`, `platform_max_version` | Key strings in `0x10075b990`'s neighbours (`0x10075c272`...) and `0x10073b1a0` | verified that the keys are read; the reply's shape is inferred |
 | Downloads are checked against an expected size and checksum from the reply ("Bad checksum for ...", "No expected checksum for ... Can't verify download.") | `0x1007460ef` | verified |
 | MCC also looks for a local file named `<sku>_Firmware_Update_<version>*` in `/Library/Arturia/MIDI Control Center/Firmware` and uses the newest ("Upgrading to LOCAL latest available FW : ") | `0x10048faa0` (`_Firmware_Update_*` at `0x100490b55`), `0x100484744` | verified |
@@ -262,29 +264,22 @@ MCC embeds Arturia's shared update manager (log tag `update_manager`).
 
 ## Not determined
 
-- **The bootloader.** Everything the device does with `0xF2`, `0xF3`, `0xF4` and with the header is
-  outside MCC. In particular: which header fields the bootloader verifies, whether it refuses
-  older versions, whether it erases before or during the download, and when it validates the body
-  XOR (per block, at the zero-length `DNLOAD`, or at `0xF3`).
-- **The bootloader's USB descriptors.** MCC requires the same VID, PID and serial after the switch,
-  a single interface of class `FE`/`01`, and a non-zero `wTransferSize`. The actual transfer size
-  in DFU mode is unknown; 64 is the application's value.
-- **Product id: resolved.** The device descriptor stored in the application image has PID `0x021B`,
-  but the firmware overwrites it at start-up (`0x0800F87C`) with `0x0228` for the KeyStep mk2 or
-  `0x0229` for the KeyStep 37 mk2. See [BOOTLOADER.md](BOOTLOADER.md).
-- **PID `0x0229`.** `info.json` lists the same image for `0x228` and `0x229`. `KeyStep2.json` knows
-  only 552. Probably the KeyStep 37 mk2, which is offered the same files (inferred).
-- **`0xF4` semantics.** MCC passes `image_num`; for the KeyStep mk2 that is 0. On the MicroFreak the
-  numbers 0 to 4 select different chips and a wavetable, so on this device other values may
-  address other targets, possibly the bootloader region. Unknown and risky to probe.
-- **`DFU_UPLOAD`.** The application's descriptor sets the can-upload bit and MCC contains upload
-  code (`0x101146210`, reached through manager slot `0x78`, `0x10114ce00`), but nothing on the
-  update path calls it. Whether the device answers, and whether an upload would return the
-  application, the bootloader or nothing, is unknown. It would be the least invasive first
-  experiment on hardware because it writes nothing.
-- **Force mode trigger** and the exact behaviour of the MIDI-port check when the unit is already
-  in DFU mode.
+- **Force mode trigger**, and whether the MIDI-port check is what printed `Error: Failed to open
+  the device.` for a unit already in DFU mode.
 - **The update API's reply.** The request above was derived, not sent.
+
+## Open on 2026-11-23, answered since
+
+Kept as history: the device-side questions this analysis could not answer, with the answers.
+
+| Question | Answer |
+|---|---|
+| What the bootloader does with `0xF2`, `0xF3`, `0xF4` and the header: which fields it verifies, whether it refuses older versions, when it erases, when it checks the body XOR | Header magic, ids, addresses, sizes and header XOR at block 0; no version check; erase right after a good header, before any data; body XOR at `0xF3` ([BOOTLOADER.md](BOOTLOADER.md), "The bootloader, read", 2, 3 and 6) |
+| The bootloader's USB descriptors and transfer size | One interface `FE/01/02`, VID:PID `1C75:0228` on the 32-key unit, `wTransferSize` 64; the serial is the application's when entered by `0xF2`, noise after a Tempo entry (BOOTLOADER.md, "Seen on a device") |
+| Product id `0x021B` in the image | The application overwrites it at start-up (`0x0800F87C`) with `0x0228` for the KeyStep mk2 or `0x0229` for the KeyStep 37 mk2 (BOOTLOADER.md, "USB identities") |
+| PID `0x0229` (`info.json` lists the same image for `0x228` and `0x229`; `KeyStep2.json` knows only 552) | The KeyStep 37 mk2: the application and the bootloader both take `0x0229` when PB11 reads low, the 37-key strap (BOOTLOADER.md, "USB identities" and "The bootloader, read", 1). The bootloader still demands `0x0228` in the image header |
+| `0xF4` semantics (on the MicroFreak `image_num` 0 to 4 selects chips and a wavetable) | Selects nothing: any `wValue` but 0 is refused; it clears the header flag and the body sum (BOOTLOADER.md, "The bootloader, read", 3) |
+| `DFU_UPLOAD` (MCC has upload code, `0x101146210`, reached through manager slot `0x78`, `0x10114ce00`, unused on the update path) | The bootloader answers: block 0 `00 21 41`, block 1 stalls into state `0x0F`, block n ≥ 2 returns flash from `0x08008000 + (n − 2) × 64`; used on a unit to read the application back (BOOTLOADER.md, "Upload: the bootloader reads flash back") |
 
 ## Reproducing
 

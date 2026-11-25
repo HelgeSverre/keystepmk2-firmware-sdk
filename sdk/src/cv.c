@@ -19,8 +19,9 @@ void ks_cv_mod(int output, uint16_t value) {
     else DAC_DHR12R1 = value;
 }
 
-/* ---- gate: PC9. PB1 and PC8 switch the output stage between the three gate formats; with
- * format 0 the pin is low while the gate is on, with the others high. ---- */
+/* ---- gate: PC9. PB1 and PC8 select one of three gate formats, as the stock firmware sets them
+ * (what they switch on the board is not mapped); with format 0 the pin is low while the gate is
+ * on, with the others high. ---- */
 
 static uint8_t gate_format = 1, gate_on;
 
@@ -68,8 +69,9 @@ int ks_sync_pulses(void) {
     return n;
 }
 
-/* ---- analog inputs: the aftertouch strip on ADC channel 0 (PA0) and the pedal socket on
- * channel 1 (PA1), as the stock firmware's calibration code and a real unit show; converted in turn from the 1 ms tick ---- */
+/* ---- analog inputs: the aftertouch sensor on ADC channel 0 (PA0) and the pedal socket on
+ * channel 1 (PA1), as the stock firmware's calibration code and the self-test on a unit show.
+ * Converted in turn from the 1 ms tick: each input once every 4 ms. ---- */
 
 static volatile uint16_t analog[2];
 static volatile uint32_t conversions;

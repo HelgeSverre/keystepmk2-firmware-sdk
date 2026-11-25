@@ -1,6 +1,7 @@
 /* Vector table and reset handler. The image is linked at 0x08008000, after the factory
- * bootloader, which jumps here without checking the image (docs/BOOTLOADER.md). Start-up assumes
- * nothing about the state it leaves: interrupts are masked, the stack is set, and every interrupt source is switched off. */
+ * bootloader, which starts it without examining its vector table (docs/BOOTLOADER.md). Start-up
+ * assumes nothing about the state the bootloader leaves: interrupts are masked, the stack is set,
+ * and SysTick and every NVIC interrupt are switched off. */
 #include <stdint.h>
 #include "regs.h"
 

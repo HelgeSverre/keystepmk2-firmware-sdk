@@ -1,10 +1,10 @@
 # KeyStep mk2 bootloader and update mode
 
 The bootloader occupies flash below `0x08008000` (32 KiB). It is not in the firmware package.
-The first sections below were written before it had been seen, from the application image
-(1.0.2), Arturia's support pages and the image header. On 2026-11-25 it was read out of a unit
-and disassembled: **"The bootloader, read"** at the end has what it really does, and where that
-differs from an earlier section, the later one is right.
+The sections up to "Checked in the emulator" were first written from the application image
+(1.0.2), Arturia's support pages and the image header, before the bootloader was seen; they have
+been brought in line with what came later. On 2026-11-25 the bootloader was read out of a unit
+and disassembled: **"The bootloader, read"** at the end has what it does.
 
 ## Entering update mode
 
@@ -13,9 +13,9 @@ differs from an earlier section, the later one is right.
 | Hold **Tempo** while switching the unit on | Arturia support article "MIDI Control Center (MCC) - Firmware Update", row "KeyStep mk2 / KeyStep 37 mk2". The article adds: "once in bootloader mode, all LEDs and the screen should be OFF" | Documented by Arturia; done on a unit (see "Seen on a device") |
 | USB class request `0xF2` to the running application | Application code, below | Read from code; used on a unit for every flash with `tools/ksflash.py`, from stock and from SDK firmware |
 
-The Tempo entry is Arturia's recovery path after a failed update, so it must work without a
-running application. That is the property that makes flashing recoverable. It was confirmed
-on a unit before anything was flashed, and the bootloader's code shows why (both below).
+The Tempo entry is Arturia's recovery path after a failed update and works without a running
+application: that is what makes flashing recoverable. It was done on a unit before anything was
+flashed, and the bootloader reads PA15 before it starts the application (both below).
 
 ## What the application does: request `0xF2`
 
@@ -42,29 +42,31 @@ The main loop polls that byte (`0x0800DF7C` → `0x0800E790`). When it is set, `
 
 1. Wait 500 ms.
 2. Write `0xDEADBEEF` to `0x20000000`.
-3. Copy 17 bytes from `0x20000268` to `0x20000004` (the buffer is filled by `0x0800F84C` from a
-   USB string; inferred to be the serial-number string, so the device keeps its identity across
-   the switch).
+3. Copy 17 bytes from `0x20000268` to `0x20000004`. `0x0800F84C` fills the buffer from a USB
+   string: the serial-number string (emulator, below), which the bootloader takes over as its own
+   (on a unit, "Seen on a device").
 4. Write `0x05FA0004` to `SCB->AIRCR`: system reset.
 
 The application's start-up code (`0x08021EC4`) initialises RAM from `0x20000020` upward only, so
-`0x20000000`-`0x2000001F` is a 32-byte block shared with the bootloader. The bootloader is expected
-to find the marker there after the reset and stay in update mode.
+`0x20000000`-`0x2000001F` is a 32-byte block shared with the bootloader. The bootloader finds the
+marker there after the reset, clears it and stays in update mode ("The bootloader, read", 1).
 
 ## What the host sends
 
-From MIDI Control Center's code ([UPDATER.md](UPDATER.md)); not yet observed on the wire.
+From MIDI Control Center's code ([UPDATER.md](UPDATER.md)). MCC's own USB traffic was not
+captured; `tools/ksflash.py` sends the same sequence and the bootloader on a unit takes it ("The
+same update with `tools/ksflash.py`").
 
 | Step | Request | Notes |
 |------|---------|-------|
 | Enter update mode | `0x21 / 0xF2`, `wIndex` = DFU interface | Skipped if the device already shows a single DFU interface |
-| Select image | `0x21 / 0xF4`, `wValue` = `image_num` (0) | Other values are untested and may address other targets |
-| Download | DFU `DNLOAD` blocks from 0, each followed by `GETSTATUS` | Block size from the device's functional descriptor; the whole image file including its 64-byte header |
+| Select image | `0x21 / 0xF4`, `wValue` = `image_num` (0) | The bootloader refuses any other value ("The bootloader, read", 3) |
+| Download | DFU `DNLOAD` blocks from 0, each followed by `GETSTATUS` | Block size from the device's functional descriptor: 64 in update mode; the whole image file including its 64-byte header |
 | Finish | Zero-length `DNLOAD`, `GETSTATUS` | |
-| Leave | `0x21 / 0xF3` | The device restarts |
+| Leave | `0x21 / 0xF3` | The device restarts if the download was complete and correct |
 
-MCC never parses the image. Magic, ids, addresses, XOR sums and version are checked by the
-bootloader or not at all.
+MCC never parses the image. The bootloader checks magic, ids, addresses and both XOR sums; it does
+not look at the version bytes ("The bootloader, read", 2).
 
 ## USB identities
 
@@ -82,16 +84,20 @@ carries vendor `1C75` and product `0228`.
 
 `0x08019764` runs at start-up: if the DUAL_BANK option bit is set, it clears it, programs the
 option bytes and reloads them. The application changes nothing else there; in particular it does
-not set read protection. Whether the bootloader or the factory set it is unknown.
+not set read protection. The bootloader does the same at every start and nothing else ("The
+bootloader, read", 7). The read-protection level is not determined.
 
-## Unknown until the bootloader is read (answered since: see "The bootloader, read")
+## Open before the bootloader was read, and the answers
 
-- What the bootloader verifies before starting an image: the header's magic, vendor and product
-  ids, the two XOR sums, the addresses.
-- Whether an image that fails those checks leaves the unit in update mode.
-- The update-mode USB identity and protocol (see [UPDATER.md](UPDATER.md) for the host side).
-- Whether the update-mode DFU upload request returns flash contents, and which range.
-- The read-protection level.
+Kept as history: the questions open before the read-out, each with where it is answered.
+
+| Question | Answer |
+|---|---|
+| What the bootloader verifies before starting an image | Nothing at start but the mark at `0x0807FFF8`; the header, every block and the body sum are checked during the download ("The bootloader, read", 1 and 2) |
+| Whether an image that fails the checks leaves the unit in update mode | A refused header erases nothing, so the old image still starts. Once a header is accepted, yes: the mark is erased first and written only after the final check ("The bootloader, read", 3 and 5) |
+| The update-mode USB identity and protocol | "Seen on a device" and "The bootloader, read" |
+| Whether DFU upload returns flash contents, and which range | Yes, from `0x08008000` ("Upload: the bootloader reads flash back"; "The bootloader, read", 4) |
+| The read-protection level | Not determined |
 
 ## Checked in the emulator
 
@@ -101,7 +107,7 @@ This confirms the reading of the application code above; it says nothing about t
 | Request to the running application | Result |
 |---|---|
 | Class request `0xF2` | Acknowledged. 540 ms later the firmware writes `0xDEADBEEF` to `0x20000000`, copies 17 bytes to `0x20000004` and resets |
-| The 17 bytes | The USB serial number string with its terminator (`0123456789ABCDEF` in the emulator). MIDI Control Center expects the same serial in update mode, so the string is presumably how the bootloader keeps it |
+| The 17 bytes | The USB serial number string with its terminator (`0123456789ABCDEF` in the emulator). MIDI Control Center expects the same serial in update mode; the bootloader copies these bytes into its serial string ("The bootloader, read", 1) |
 | Class requests `0xF0`, `0xF4` | Acknowledged, no effect |
 | DFU `GETSTATUS` (`0xA1`/`3`) | Stalled |
 | `GET_DESCRIPTOR` type `0x21` | `09 21 0B FF 00 40 00 10 01` |
@@ -110,11 +116,11 @@ The SDK's USB driver (`sdk/src/usb.c`) behaves the same way for all five rows.
 
 ## The flasher
 
-`tools/ksflash.py` implements the host side from [UPDATER.md](UPDATER.md). It is tested only in
-the emulator, against `FakeBootloader`: a model built from what MIDI Control Center expects, not
-from the real bootloader. `just flash-selftest` runs the update in both directions and every
-refusal. `just probe` reads a connected unit's descriptors and sends nothing else; it is the
-tool for the first look at update mode.
+`tools/ksflash.py` implements the host side from [UPDATER.md](UPDATER.md). It has flashed a
+unit since 2026-11-24 (below, and [FLASHING.md](FLASHING.md)). Offline it runs against
+`FakeBootloader`, a model first built from what MIDI Control Center expects: `just
+flash-selftest` runs the update in both directions and every refusal there. `just probe` reads a
+connected unit's descriptors and sends nothing else.
 
 ## Seen on a device, 2026-11-24
 
@@ -130,14 +136,13 @@ holding Tempo while switching on.
 | Serial string | `4651400812010772` | nine characters of noise |
 
 - Holding Tempo while switching on enters update mode with the application untouched: the
-  recovery entry works (the first gating question in ROADMAP.md).
+  recovery entry works (ROADMAP.md, "The gating question", question 1).
 - Update mode declares download, upload and will-detach, 64-byte transfers, and DFU version
   `0x011A` where the application's stub says `0x0110`.
-- The serial string is noise after a Tempo entry. That fits the reading above: the application
-  hands its serial string to the bootloader in RAM when it is asked for update mode, and nothing
-  does after a cold start. MIDI Control Center matches the update-mode device by serial, so it
-  might not have recognised a unit entered this way. It did: it flashed the unit from there
-  (2026-11-24).
+- The serial string is noise after a Tempo entry: the application hands its serial string to
+  the bootloader in RAM when asked for update mode, and nothing does after a cold start. MIDI
+  Control Center matches the update-mode device by serial ([UPDATER.md](UPDATER.md)), yet it
+  flashed a unit entered this way (below).
 
 ### Upload: the bootloader reads flash back
 
@@ -154,18 +159,17 @@ Requests sent in update mode on the same unit: `DFU_GETSTATE`, `DFU_GETSTATUS`, 
 
 - `00 21 41` is the command list an ST DfuSe bootloader returns for block 0: get commands, set
   address pointer (`0x21`), erase (`0x41`). Block 1 is invalid there too, and reads start at block
-  2, as here. It looked DfuSe-shaped from outside; the code shows the three bytes are a leftover
-  of ST's library and that there are no commands and no pointer ("The bootloader, read", 4). Set
-  address pointer and erase were not sent.
+  2, as here. In this bootloader the three bytes are a leftover of ST's library: there are no
+  commands and no pointer ("The bootloader, read", 4). Set address pointer and erase were not
+  sent.
 - 7680 blocks from block 2 (`0x08008000` to the end of flash at `0x08080000`) were read. The first
   429,384 bytes are stock 1.0.2 without its 64-byte header, byte for byte: the load address is
   `0x08008000`, the header is not stored there, and this unit runs 1.0.2.
 - After the image: `FF` to the end of its 2 KiB page (`0x08071000`); `00` from `0x08071000` to
-  `0x0807F800` (whether that is what the flash holds or what the bootloader returns for it is not
-  known); `FF` in the last page up to `0x0807FFF8`; and there `DE C0 0D 60 0A 00 00 00`:
-  `0x600DC0DE` and the number 10. It is the mark the bootloader leaves for an image it accepted;
-  the 10 is a newline that happens to follow the constant in the bootloader ("The bootloader,
-  read", 5).
+  `0x0807F800`, which is what the flash holds ("The bootloader, read", 4); `FF` in the last page
+  up to `0x0807FFF8`; and there `DE C0 0D 60 0A 00 00 00`:
+  `0x600DC0DE` and the number 10: the mark the bootloader leaves for an image it accepted. The 10
+  is a newline that happens to follow the constant in the bootloader ("The bootloader, read", 5).
 - The image's header was not found anywhere in the range read.
 
 ### An update through MIDI Control Center, started from update mode
@@ -243,8 +247,8 @@ unit.
 Read on 2026-11-25 from `firmware/device/bootloader-0x08000000.bin` (32 KiB, read from the unit;
 code ends at `0x08005FB0`, initialised data follows to `0x080061C0`). Its own strings call it
 `KS2 Bootloader` `0.0.1`, built `Jun 25 2025 12:05:45`. It is ST's USB device library with the
-ST DFU class, modified, under a small C++ layer of Arturia's. This section replaces the guesses
-above where they differ. **V** = read in the code at the address given; **I** = inferred;
+ST DFU class, modified, under a small C++ layer of Arturia's. Where an earlier section differs,
+this one is right. **V** = read in the code at the address given; **I** = inferred;
 nothing in this section was tried on a unit unless it says so.
 
 RAM it uses, for reading the addresses below:
@@ -277,9 +281,9 @@ this order:
   (`0x080025A4`–`B6`). The mark is the only evidence of a good image.
 - Only the first word of the mark is compared (`0x08000334`: add `0x9FF23F22`, test for zero).
 - PA15 is made an input with pull-down just before (`0x08002B34`–`48`), so "high" is "pressed".
-- The 17 serial bytes at `0x20000004` are copied to the USB serial string in **every** case, with
-  byte 16 forced to zero (`0x080005FA`–`0x0800060A`), not only when the marker is present. That is
-  why the serial is noise after a cold start.
+- The 17 serial bytes at `0x20000004` are copied to the USB serial string on **every** path into
+  update mode, with byte 16 forced to zero (`0x080005FA`–`0x0800060A`), not only when the marker
+  is present. Hence the noise serial after a cold start.
 - PB11 picks the identity (`0x080005D4`): high gives `0x0228` "KeyStep mk2 Updater", low gives
   `0x0229` "KeyStep 37 mk2 Updater". It changes the USB descriptor only (`0x08002390`), not the
   product id demanded of an image.
@@ -311,9 +315,9 @@ Differences from `tools/fwpack.py` `check()`:
 
 | | Bootloader | `fwpack.py` |
 |---|---|---|
-| Product id | `0x0228` only, on both models; bytes 6–7 ignored | Also accepts `0x0229`, which the bootloader refuses |
+| Product id | `0x0228` only, on both models; bytes 6–7 ignored | `0x0228` only (same) |
 | Load address | Anything from `0x08008000` up | Exactly `0x08008000`. Correct in effect: the jump target is fixed |
-| End | ≤ `0x08080000` | Same limit, but see below: the real limit is `0x0807F800` |
+| End | ≤ `0x08080000` | ≤ `0x0807F800`, the start of the mark's page (stricter; see below) |
 | Bytes 10–11, `0x19`, `0x1A`–`0x3E` | Not looked at | Reserved ones must be zero (stricter, harmless) |
 | Stack pointer and reset vector | Not looked at | Checked: this is the only guard there is |
 | Body length against the file | Pointer must land exactly on `end` | `size` equals the body length (equivalent) |
@@ -321,7 +325,8 @@ Differences from `tools/fwpack.py` `check()`:
 An image that reaches into the last page (`0x0807F800` up) is accepted, but the mark is programmed
 over its last eight bytes afterwards with no check of the result (`0x0800035C`–`68`); unless
 those bytes are erased the mark is not what boot looks for and the unit stays in update mode
-(I, the programming outcome was not tested). Keep images at or below `0x0807F800`.
+(I, the programming outcome was not tested). Keep images at or below `0x0807F800`, as `fwpack.py`
+does.
 
 **Status the host sees** (the six `GETSTATUS` bytes are `+0x50`–`+0x55`):
 
@@ -362,8 +367,8 @@ written.** All V.
 - Programming is in 8-byte units (`0x08002736`–`48`). A block whose length is not a multiple of 8
   programs up to 7 stale bytes from the previous block after its own; fine for the last block,
   and the sum and the read-back cover only the real length. A short block in the middle leaves
-  the pointer unaligned and the next block should fail (I).
-- Data may run at most one block past `end` before the pointer test refuses it; `0xF3` then fails
+  the pointer unaligned and the next block fails (I).
+- Data can run at most one block past `end` before the pointer test refuses it; `0xF3` then fails
   because the pointer is not on `end`.
 - The whole erase runs inside the USB interrupt (`0x08002C8C` → `0x08004078` → `0x080011C8`), so
   the request after block 0's status poll gets no answer until about 211 pages are erased (I for
@@ -406,15 +411,15 @@ if it passes every header test.
 
 - The read callback is a bare `bx lr` (`0x08002498`): no copy, no bounds test. Reachable range is
   `0x08008000` to `0x08407F80`; the bootloader's own 32 KiB cannot be read this way. Past the end
-  of flash (block 7682 and up) the read should fault, and the fault handler is an endless loop
-  (`0x08002C7C`): power cycle (I). `ksflash.py` stops at 7681.
+  of flash (block 7682 and up) the read faults (I), and the fault handler is an endless loop
+  (`0x08002C7C`, V): power cycle. Not tried on a unit. `ksflash.py` stops at 7681.
 - So the zeros at `0x08071000`–`0x0807F800` **are what the flash holds**; the bootloader does not
   substitute anything. It also never writes there: its only writes are image blocks inside
   `load`–`end` and the mark. Where the zeros came from is not determined (the factory image is
   the obvious candidate).
 - State `0x0F` is not in `DFU_ABORT`'s list (states 2, 3, 5, 6, 9; mask at `0x08001512`), which
-  is why abort did nothing. `DFU_CLRSTATUS` twice should clear it: the first gives dfuERROR with
-  status `0x0E`, the second dfuIDLE (`0x080014DC`). V in code, not tried.
+  is why abort did nothing. By the code two `DFU_CLRSTATUS` clear it: the first gives dfuERROR
+  with status `0x0E`, the second dfuIDLE (`0x080014DC`). V in code; not tried on a unit.
 
 ### 5. The mark at `0x0807FFF8`
 
@@ -442,8 +447,8 @@ if it passes every header test.
 
 Without a completed download step 1 fails, no request is raised, and state 8 is all that
 happens: what was seen. Uploads in between change neither pointer nor sum, so `0xF3` still works
-after a read-back: also what was seen. Two `DFU_CLRSTATUS` should leave state 8 without a bus
-reset (V in code, not tried).
+after a read-back: also what was seen. By the code two `DFU_CLRSTATUS` leave state 8 without a
+bus reset (V in code; not tried on a unit).
 
 ### 7. Writes below `0x08008000` and to option bytes
 

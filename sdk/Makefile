@@ -6,8 +6,9 @@
 #   make flash-sim       rehearse flashing it, in the emulator
 #   make fonts           write build/generated/keystep_fonts.h from the stock image (done when needed)
 #   make new APP=myapp   start examples/myapp from examples/hello
-# There is no `make flash` yet: nothing has been flashed to a device (docs/ROADMAP.md).
+# Flashing a unit is `just flash myapp` in the repository root (tools/ksflash.py, docs/FLASHING.md).
 APP     ?= hello
+# The version in the image header. The bootloader does not compare versions (docs/BOOTLOADER.md).
 VERSION ?= 1.0.9
 BUILD   := build/$(APP)
 CC      := arm-none-eabi-gcc

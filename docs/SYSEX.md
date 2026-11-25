@@ -2,9 +2,11 @@
 
 Static analysis of the application image, 2026-11-22. The wire format (7-bit packing, sequence
 byte, CBOR arguments) and the nine operations seen in MIDI Control Center's traffic are documented
-in the `keystep2-editor` project's README; this file adds what the firmware itself shows.
+in the `keystep2-editor` project's README (a separate project, not part of this repository); this
+file adds what the firmware itself shows.
 
-Addresses are for 1.0.4 unless noted. Nothing here was sent to a device.
+Addresses are for 1.0.4 unless noted. Only `EA F9` and the reads in "Groups 4 and 5 on a device"
+were sent to a unit (on 1.0.2); the rest is static analysis or the emulator.
 
 ## Dispatcher
 
@@ -36,15 +38,16 @@ The same 14 codes are present in 1.0.2. No operation was added or removed by 1.0
 
 `EA F9` was sent to a device on 1.0.2 (2026-11-22). The reply is a value reply holding one CBOR
 text string: `69 31 2E 30 2E 32 2E 37 38 32`, that is `1.0.2.782` (version and build). The other
-four have not been sent; they change state or belong to factory tooling and should be left alone
-until understood.
+four have not been sent; they change state or belong to factory tooling, and stay unsent until
+understood.
 
 ### Seen in the emulator (2026-11-23)
 
 - Requests are answered on the USB MIDI port only. The same bytes on the DIN input get no reply.
 - The universal identity request (`F0 7E 7F 06 01 F7`) gets no reply on either port. The image
   does hold a routine that builds an identity reply (`F0 7E 7F 06 02 00 20 6B` + family, member
-  and version, at `0x08018E04` in 1.0.2), but nothing was found that calls it. MIDI Control
+  and version, at `0x08018E04` in 1.0.2), but its only reference is an entry in a table of function
+  pointers (`0x0806A7D0`), and nothing was found that calls it through that table. MIDI Control
   Center's device definition lists the matching family and member ids, so how it reads the
   firmware revision of a KeyStep mk2 is still open.
 - `36 FB` changes a setting in RAM; `19 92` writes the settings to flash
@@ -83,8 +86,8 @@ was written.
 So `0x8000 + 40 × step + 4 + k` is byte `k` of a step record. Values come back as plain bytes, not
 scaled to 15 bits. All 56 × 36 bytes matched the file read with `08 DF`.
 
-- The limit of 2240 is 56 objects, so steps 57-64 are out of reach. (2240 is 64 × 35; the limit
-  looks like it was computed for a 35-byte record.)
+- The limit of 2240 is 56 objects, so steps 57-64 are out of reach. (2240 is 64 × 35: the limit
+  was computed for a 35-byte record, inferred.)
 - Ids `0x88BF` and `0xA3FF` answer; `0x88C0` and `0xA400` get no reply.
 - One read takes about 10 ms; all 2240 took 23 s. A whole-pattern block read is faster.
 
@@ -94,9 +97,9 @@ negative integers. The file's 1024-byte region at offset 2497 has room for 64 ×
 fits 64 of these objects without their pointers.
 
 **Do not write to these groups with `78 48` without checking the index.** Indices 0-3 of each
-group-4 object and words 0-1 of each group-5 object are vtable pointers; overwriting one would
-most likely crash the firmware. Writing has not been tried, and whether a written value is saved
-without a commit is unknown.
+group-4 object and words 0-1 of each group-5 object are vtable pointers; overwriting one is
+expected to crash the firmware (inferred). Writing has not been tried, and whether a written
+value is saved without a commit is unknown.
 
 **Global settings** (read `2A 89`, write `36 FB`):
 

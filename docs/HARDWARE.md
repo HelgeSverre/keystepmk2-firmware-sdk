@@ -1,9 +1,10 @@
 # Hardware map (from firmware 1.0.2)
 
-Derived 2026-11-23 from the stock image `ks2_embedded__fw1_0_2_782` only. Nothing was sent to a
-device and no board was opened.
+Derived 2026-11-23 from the stock image `ks2_embedded__fw1_0_2_782`; no board was opened.
+Observations made later on one 32-key unit are marked "device" or point at
+[SELFTEST.md](SELFTEST.md) and [BOOTLOADER.md](BOOTLOADER.md).
 
-Two methods were used:
+Two methods:
 
 - **Reading** the Ghidra decompilation and the raw disassembly.
 - **Offline emulation** of the image in Unicorn with stubbed peripherals: reset handler, HAL
@@ -13,12 +14,12 @@ Two methods were used:
 
 Tags: **V** = verified, read from code or seen as a register write in the emulation trace.
 **I** = inferred from context. Addresses in brackets are the functions the fact comes from.
-Function names used here are listed in `ghidra/names-1.0.2.tsv`. Firmware 1.0.4 was not
-cross-checked.
+Function names used here are listed in `ghidra/names-1.0.2.tsv`. Firmware 1.0.4 is
+cross-checked only where a section says so (fonts, external flash).
 
-Alternate-function numbers are verified; the peripheral they select comes from the STM32G0B1
-datasheet table as remembered, and each one matches the peripheral whose clock is enabled in the
-same init routine.
+Alternate-function numbers are V. The peripheral each selects is taken from the STM32G0B1
+datasheet's table from memory, not re-read; each matches the peripheral whose clock the same init
+routine enables.
 
 ## Summary
 
@@ -71,7 +72,7 @@ written before the pins are switched to output.
 
 | Pin | Mode | Pull | AF | Init | Function | Tag |
 |-----|------|------|----|------|----------|-----|
-| PA0 | analog | – | – | – | ADC1 IN0: aftertouch sensor [0x08019ccc] | V pin, I function (see Pedal) |
+| PA0 | analog | – | – | – | ADC1 IN0: aftertouch sensor [0x08019ccc] | V pin; function I from code (see Pedal), confirmed on a unit (SELFTEST.md) |
 | PA1 | analog | – | – | – | ADC1 IN1: pedal socket [0x08019ccc, 0x08016a40] | V |
 | PA2 | input, EXTI2 both edges | none | – | – | Sync in, line 2 (reads inverted) [0x080162e8] | V |
 | PA3 | input, EXTI3 both edges | none | – | – | Sync in, line 1 (reads inverted), pulses time-stamped [0x080162f8, 0x0805a2e8] | V |
@@ -137,7 +138,7 @@ Board code addresses pins by a 16-bit id, `port × 16 + pin` (port A = 0), throu
 | SPI3 | 0x40003C00 | master, mode 0, PCLK/64 = 1 MHz, receive-only; `CR1 = 0x72C` | Button shift register | 0x0801a030 |
 | I2C1 | 0x40005400 | `TIMINGR = 0x10303AFF` (about 100 kHz at 64 MHz), 7-bit addressing | Touch controller | 0x08019eac |
 | USART1 | 0x40013800 | `BRR = 0x800` (31250 baud), 8N1, TX + RX, DMA both ways | MIDI DIN | 0x0801a7a8 |
-| ADC1 | 0x40012400 | 12 bit, clock PCLK/2, sampling 160.5 cycles, channels 0 and 1, one-shot DMA of 2 samples restarted by software | Pedal, aftertouch | 0x08019c30 |
+| ADC1 | 0x40012400 | 12 bit, clock PCLK/2, sampling 160.5 cycles, channels 0 and 1, one-shot DMA of 2 samples restarted by software | Aftertouch (channel 0), pedal (channel 1) | 0x08019c30 |
 | DAC1 | 0x40007400 | both channels, `MCR` mode 2 (pin output, buffer off), no trigger, self-calibrated at start | CV mod 1 and 2 | 0x08019d68 |
 | TIM2 | 0x40000000 | 32 bit, `SMCR = 0x27` (external clock mode 1 from ITR2 = TIM3 TRGO), 4 compare channels in timing mode with interrupts | Musical tick counter and event scheduler | 0x0801a160 |
 | TIM3 | 0x40000400 | PSC 0, ARR variable, `CR2.MMS` = update, update interrupt | Tempo divider feeding TIM2 | 0x0801a284 |
@@ -154,7 +155,7 @@ Board code addresses pins by a 16-bit id, `port × 16 + pin` (port A = 0), throu
 
 | DMA1 channel | DMAMUX request | `CCR` | Use | From |
 |--------------|----------------|-------|-----|------|
-| 1 | 5 (ADC1) | 0x580: 16 bit, memory increment, one-shot | ADC samples to 0x20019de4 (2 words) | 0x08019ccc |
+| 1 | 5 (ADC1) | 0x580: 16 bit, memory increment, one-shot | ADC samples to 0x20019de4 (two 16-bit samples: channel 0, then 1) | 0x08019ccc |
 | 2 | 50 (USART1_RX) | 0xA0: circular, memory increment | MIDI in, 256-byte ring at 0x2001838c | 0x0801a7a8, 0x0800e360 |
 | 3 | 51 (USART1_TX) | 0x90: memory to peripheral | MIDI out, buffer at 0x20018284 | 0x0801a7a8, 0x0800e484 |
 | 4 | 44 (TIM16_CH1) | 0x590: memory to peripheral, 16 bit | LED compare values, 1113 words from 0x200192e8 to `TIM16_CCR1` | 0x0801a62c |
@@ -216,7 +217,8 @@ EXTI4_15 is not enabled in the NVIC: lines 6 and 15 only latch pending flags.
   then up to 39 × 24 bit slots, then a zero (V).
 - Chain 0 was resent about every 6 ms in the emulated idle loop; chain 1 only on change (V in
   emulation).
-- Total 54 LEDs (V). Which index is which LED on the panel is not determined.
+- Total 54 LEDs (V). Chain 1 is mapped in "Control map from emulation" below; the panel position
+  of chain 0's 39 LEDs is not determined.
 
 ## Keybed [0x08012e48, 0x080130d0, 0x08012ecc]
 
@@ -234,10 +236,14 @@ EXTI4_15 is not enabled in the NVIC: lines 6 and 15 only latch pending flags.
 - Velocity: the microsecond time (TIM17) is stored when the first contact closes; when the
   second closes, `(t2 − t1) × 10 / divisor` is queued with the key number (bit 7 set = note on).
   Release works the same way in reverse (V). Events go to an 8-byte-per-entry ring.
-- Aftertouch: a single analog value on ADC1 channel 0 (PA0), not per key (I: the other channel
-  is the pedal, V, see Pedal). Its range object is at 0x20019d38: minimum and maximum come from
-  `calib/aft_factory`, then `calib/aft_user` [0x08016f98]; with neither file the defaults are
-  600 and 3100 (V). The level is near 0 with no key pressed (device: 0 to 4).
+- Aftertouch: a single analog value on ADC1 channel 0 (PA0), not per key (I from code: the other
+  channel is the pedal, V, see Pedal; confirmed on a unit, SELFTEST.md). Its range object is at
+  0x20019d38. [0x08016f98] loads minimum and maximum from `calib/aft_user` [0x08014e10]; if that
+  gives a maximum of 0, from `calib/aft_factory` [0x08014c54]; if that gives 0 too, it uses 600
+  and 3100 (V; path objects 0x20019be8 and 0x20019bf0, named at 0x0801573c). A separate method
+  [0x080164e8] sets the range to 700–3400, 600–3100 or 200–2700 by a one-byte argument (V);
+  that the argument is the Aftertouch Curve setting is I. Device: 0 to 5 at rest, 3279 pressed
+  hard.
 
 ## Buttons [0x080135b4]
 
@@ -245,7 +251,7 @@ EXTI4_15 is not enabled in the NVIC: lines 6 and 15 only latch pending flags.
   (two 8-bit parts is I). PB4 low loads, high shifts (V).
 - The two bytes form a little-endian word. Bits 0–7 and 9–15 are each debounced and call their
   own handler; the mapping differs between the 32- and 37-key models (flag at object + 0xE8) (V).
-  Which bit is which button is not determined.
+  Bit-to-button map: "Control map from emulation" below.
 - Scanned from the main loop: about 1,100 reads in 195 ms of emulated time.
 
 ## Encoders [0x0800a310, 0x0800ade4]
@@ -262,7 +268,8 @@ select pin is driven high again (V, emulation trace and object fields).
 | 0x20017590 | PD9 | PC14 | PC15 |
 
 The object addresses are from the 37-key code path (the emulated strap read low). Which encoder
-is which knob is not determined.
+is which knob on the 37-key model is not determined; the 32-key model's one encoder is in
+"Control map from emulation".
 
 ## Touch controller [0x0800ade4, 0x080093c4, 0x080093e0, 0x08009430]
 
@@ -364,13 +371,15 @@ maximum [0x08016a40, 0x08016a90] read sample index 1 of the ADC buffer, and thei
 1885 (V). The ADC converts channel 0 then 1 in fixed forward order into a two-sample buffer
 [0x08019c30], so index 0 is PA0.
 
-With nothing plugged in the input reads full scale (device: 4086 to 4095), so the socket is
-pulled up. The menu has one "Pedal Input" with Expression, Sustain and AutoDetect.
+With nothing plugged in the input reads full scale (device: 4086 to 4095): the socket is pulled
+up (I). One switch pedal took it from 4092 to 37 when pressed (device, SELFTEST.md). The menu has
+one "Pedal Input" with Expression, Sustain and AutoDetect.
 
-Earlier versions of this file had the two channels the other way round. The SDK's self-test on
-a unit showed it: "aftertouch" stood at 4091 and did not move under pressure, and "pedal" stood
-at 0 with a switch pedal pressed. This unit has no `calib/aft_factory`, `calib/aft_user` or
-`calib/expr_pdl`, so the stock firmware runs on the defaults above.
+Earlier versions of this file had the two channels the other way round. The SDK's self-test
+exposed it: on PA1, read as "aftertouch", the level stood at 4091 and did not move under
+pressure; on PA0, read as "pedal", it stood at 0 with a switch pedal pressed. The unit has no
+`calib/aft_factory`, `calib/aft_user` or `calib/expr_pdl`, so its stock firmware runs on the
+defaults above.
 
 ## External flash [0x08018574, 0x08017f08, 0x0801788c, 0x080188a0]
 
@@ -465,7 +474,9 @@ Seen in the emulator after start-up (V in emulation, 2026-11-23):
 - With the host model in `tools/usbmodel.py` the firmware enumerates as `1C75:0228`,
   "Arturia" / "KeyStep mk2" / serial "0123456789ABCDEF", and answers the SysEx version request
   on its USB MIDI port with `1.0.2.782`, the same reply a real unit gave. The serial is the
-  image's default, and the one unit looked at reports the same string.
+  image's default. The one unit looked at reports its own, `4651400812010772`
+  ([BOOTLOADER.md](BOOTLOADER.md), "Seen on a device"); where the application reads it from is
+  not determined.
 
 ## Memory and run-time [0x08021ec4, 0x08021e60, 0x08061aac]
 
@@ -489,8 +500,11 @@ Seen in the emulator after start-up (V in emulation, 2026-11-23):
 ## Control map from emulation
 
 Found on 2026-11-23 by running stock 1.0.2 in `tools/emu.py`, driving one input at a time and
-reading the display, the LED data and the MIDI sent on USART1. Nothing here has been checked on
-a device. It supersedes the "not determined" notes above for the 32-key model.
+reading the display, the LED data and the MIDI sent on USART1. For the 32-key model it answers
+the bit, LED and encoder questions left open above. The SDK uses this map, and its self-test
+confirmed the button bits, the encoder, the key order, which strip is which and the 13 button
+lights on a 32-key unit (SELFTEST.md). The touch values,
+note numbers and screens are from emulation only.
 
 **Buttons** (shift-register bit, 1 = pressed):
 
@@ -534,8 +548,9 @@ contacts the velocity is 100.
 | 5 | Arp | 12 | Encoder |
 | 6 | Mutate (inferred) | 13, 14 | Never lit |
 
-Indices 0 to 12 run a colour sweep at start-up. Chain 0 (39 LEDs) stayed dark in every state
-tried, so its layout is still unknown.
+The self-test's light checks confirmed all 13 on a unit, the three marked "inferred" included.
+Indices 0 to 12 run a colour sweep at start-up. Chain 0 (39 LEDs) stayed dark
+in every state tried; its layout is not determined.
 
 **Screens seen:** version number at start-up, then "Arturia KeyStep" when neither Seq nor Arp is
 on; "Tempo / Bank / Preset" in Seq mode; "Arp | Up" in Arp mode; the Global Settings menu.
@@ -550,17 +565,19 @@ on; "Tempo / Bank / Preset" in Seq mode; "Arp | Up" in Arp mode; the Global Sett
 - Which encoder object is which knob on the 37-key model. (The button bits above and the
   encoder push were confirmed on a 32-key unit by the self-test, SELFTEST.md.)
 - What the 39 positions of LED chain 0 are: a 32-key unit has no lights above its keys.
-- How sustain and expression pedals are told apart on PA1, and which way a switch pedal moves it.
+- How sustain and expression pedals are told apart on PA1, and whether every switch pedal pulls
+  it low as the one tried did.
 - The jack wiring and the analog stages behind the sync, gate, pitch and mod pins (voltage
   ranges, filters, gate format switching).
 - The unit of the tempo value and the tick resolution of TIM2.
 - The purpose of TIM14.
 - The settings block's 8-byte header. (0x41000–0x5FFFF was blank on the unit read, and its
   calibration files are described above.)
-- Keybed velocity divisor and curve: on a unit the SDK's velocities ran from 1 to 93 when played
-  by hand, so its scale may be short of the stock firmware's. (Key order on the 32-key model is
-  confirmed: SELFTEST.md.)
-- Everything behind the DIN, CV, gate and sync pins on a unit: none of them has been tried there.
+- Keybed velocity divisor and curve. On a unit the SDK's velocities ran from 1 to 93 when played
+  by hand; whether its scale matches the stock firmware's is not determined. (Key order on the
+  32-key model is confirmed: SELFTEST.md.)
+- Everything behind the DIN, CV, gate and sync pins on a unit. The self-test's sync check was a
+  SKIP with the socket empty and its MIDI and CV checks were declined (SELFTEST.md).
 - Pins not configured by the firmware (PA11–PA14, PD7, PD10 and up, ports E and F): assumed
   unused or fixed-function.
-- Whether 1.0.4 changes any of this.
+- Whether 1.0.4 changes anything outside the fonts and the external-flash code.

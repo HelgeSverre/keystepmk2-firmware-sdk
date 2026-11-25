@@ -83,7 +83,8 @@ typedef struct {
     uint8_t muted;                      /* 0 or 1 */
     uint8_t follows_transpose;          /* 0 or 1: moves when another track is transposed from the keys */
     int8_t shift;                       /* semitones added to every note, -48 to 48 (the Octave keys add 12) */
-    uint8_t spice;                      /* 0 to 100: how far each step's velocity and gate are moved by its dice */
+    uint8_t spice;                      /* 0 to 100: how far each step's velocity and gate are moved by its dice;
+                                           higher up some steps drop out or play an octave away */
     uint8_t dice;                       /* which set of random amounts Spice uses; Dice deals another */
     uint8_t reserved;
     mk_step step[MK_STEPS];
@@ -107,8 +108,9 @@ int mk_track_used(const mk_track *track);       /* 1 if any step within its leng
  * velocity and one for its gate, and Spice scales them. A step varies the same way on every pass.
  * At full Spice a velocity moves by up to 24 either way and a gate is anything from 15 % to 320 %
  * of what it was (never past the end of its step here). */
-int mk_spice_velocity(const mk_track *track, int step, int velocity);  /* 1 to 127 */
-int mk_spice_gate(const mk_track *track, int step, int ticks, int most);       /* 1 to `most` */
+int mk_spice_velocity(const mk_track *track, int step, int velocity);  /* 1 to 127: up to 32 either way */
+int mk_spice_gate(const mk_track *track, int step, int percent);       /* the step's gate, 1 to 98 per cent; 0: the step does not play */
+int mk_spice_octave(const mk_track *track, int step);                  /* 0, 12 or -12 semitones for the step's notes */
 
 /* ---- engine ---- */
 
@@ -261,10 +263,16 @@ void mk_chord_learn(mk_chord_settings *chord, const uint8_t *notes, int n);
 
 /* ---- Mutate ---- */
 
-/* Make the steps of `track`, within its length, a variation of the same steps of `original`: as
- * many steps with notes, the same velocities, some moved a step, some with the notes of another
- * step, a few an octave away. Never the same as the original while it has a note. */
-void mk_mutate(mk_track *track, const mk_track *original, uint32_t (*random)(void));
+/* Make the steps of `track`, within its length, a variation of the same steps of `original`, by
+ * the stock firmware's rule (mutate.c). `amount`, 0 to 100, is how far it goes; 0 gives the
+ * original. As many steps play as before, with the velocities they had, and every pitch stays in
+ * the scale the track's own notes make. With an amount above 0 it never equals the original
+ * while that has a note. */
+void mk_mutate(mk_track *track, const mk_track *original, int amount, uint32_t (*random)(void));
+/* The amount for a Mutate button held this long, as the stock firmware counts it: 30 for a tap
+ * under a quarter of a second; after that 0 to 100 over a second, back to 0 over two thirds of
+ * one, and round again. */
+int mk_mutate_amount(uint32_t held_ms);
 
 /* ---- following an external clock: the ticks between two of its pulses, spread out ----
  *

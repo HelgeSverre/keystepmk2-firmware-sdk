@@ -1,8 +1,8 @@
-/* KeyStep mk2 SDK: the board, as far as it is mapped (docs/HARDWARE.md).
+/* KeyStep mk2 SDK: the mapped parts of the board (docs/HARDWARE.md).
  *
  * Written against tools/emu.py and checked on one 32-key unit with sdk/examples/selftest. What
- * that showed to work, and what has not been tried there (MIDI DIN, CV, gate, sync), is in
- * sdk/README.md. */
+ * that showed to work, and what has not been tried there (MIDI DIN, CV, gate, sync, ks_store),
+ * is in sdk/README.md. */
 #ifndef KEYSTEP_H
 #define KEYSTEP_H
 #include <stdint.h>
@@ -71,8 +71,8 @@ int ks_touch(int strip);
 int ks_touch_present(void);
 
 /* ---- LEDs: set colours as 0xRRGGBB, then ks_leds_show(). The stock firmware never drives a
- * channel above 0x8D. The 32-key model has the thirteen button lights only. ---- */
-#define KS_LED_KEY(n) (n)               /* 0 to 38: lights above the keys, on the 37-key model only */
+ * channel above 0x8D. A 32-key unit shows the thirteen button lights only. ---- */
+#define KS_LED_KEY(n) (n)               /* 0 to 38: LED chain 0; what its positions are is not determined */
 enum {
     KS_LED_OCT_DOWN = 39, KS_LED_OCT_UP, KS_LED_HOLD, KS_LED_SHIFT, KS_LED_SEQ, KS_LED_ARP,
     KS_LED_MUTATE, KS_LED_CHORD, KS_LED_TEMPO, KS_LED_RECORD, KS_LED_STOP, KS_LED_PLAY,
@@ -99,7 +99,7 @@ int ks_sync_pulses(void);               /* pulses that arrived on the clock inpu
 void ks_sync_clock_in(void);
 
 /* ---- analog inputs, 0 to 4095, refreshed every 4 ms ---- */
-int ks_aftertouch(void);                /* pressure on the keybed's strip: near 0 at rest, about 3300 pressed hard */
+int ks_aftertouch(void);                /* pressure on the keys, one sensor for all: near 0 at rest, about 3300 pressed hard */
 int ks_pedal(void);                     /* the pedal socket: near 4095 with nothing plugged in, near 0 shorted */
 uint32_t ks_analog_count(void);         /* conversions finished since start: it stands still if the converter does */
 
@@ -123,8 +123,8 @@ extern const char ks_usb_serial[17];    /* 16 characters */
 
 /* ---- MIDI real-time bytes (0xF8 to 0xFF) as they arrive. Define ks_midi_realtime to follow a
  * clock without waiting for the main loop: it runs with interrupts off, mostly in the interrupt
- * that received the byte (the 65 us timer for DIN, USB's own for USB), so keep it short. The bytes still reach ks_midi_get()
- * and ks_usb_midi_get(), wherever they fell in the stream. ---- */
+ * that received the byte (the 65 us timer for DIN, USB's own for USB), so keep it short. The
+ * bytes still reach ks_midi_get() and ks_usb_midi_get(), wherever they fell in the stream. ---- */
 #define KS_MIDI_DIN 0
 #define KS_MIDI_USB 1
 void ks_midi_realtime(int port, uint8_t byte);
@@ -138,9 +138,9 @@ extern const char ks_version[];         /* "0.0.1.0" unless your firmware define
 int ks_sysex_request(uint16_t op, const uint8_t *args, int len, uint8_t *reply, int max);
 
 /* ---- external flash: 512 KiB, erased in 4 KiB sectors. The stock firmware keeps its patterns,
- * settings and the factory calibration there; it never addresses KS_FLASH_USER and the 124 KiB
- * after it. Erase and write are refused outside that area unless ks_flash_allow_stock_area(1)
- * was called. Results: 0, or a negative KS_FLASH_ code. ---- */
+ * settings and the factory calibration there; it never addresses the 124 KiB from KS_FLASH_USER
+ * (0x41000-0x5FFFF). Erase and write are refused outside that area unless
+ * ks_flash_allow_stock_area(1) was called. Results: 0, or a negative KS_FLASH_ code. ---- */
 #define KS_FLASH_SIZE 0x80000u
 #define KS_FLASH_SECTOR 0x1000u
 #define KS_FLASH_USER 0x41000u
@@ -148,12 +148,12 @@ int ks_sysex_request(uint16_t op, const uint8_t *args, int len, uint8_t *reply, 
 enum { KS_FLASH_RANGE = -1, KS_FLASH_TIMEOUT = -2, KS_FLASH_VERIFY = -3, KS_FLASH_EMPTY = -4 };
 uint32_t ks_flash_id(void);                                        /* 0x1F8401 or 0xC84013 */
 int ks_flash_read(uint32_t addr, void *data, uint32_t len);
-int ks_flash_erase(uint32_t addr);                                 /* the sector holding addr; up to 0.5 s */
+int ks_flash_erase(uint32_t addr);                                 /* the sector holding addr; waits up to 0.5 s */
 int ks_flash_write(uint32_t addr, const void *data, uint32_t len); /* can only clear bits: erase first */
 void ks_flash_allow_stock_area(int allow);
 
-/* ---- store: numbered records in the SDK's flash area, one sector each, with a checksum.
- * Saving erases first, so power lost during a save loses that slot. ---- */
+/* ---- store: numbered records in the SDK's flash area, one sector each, with a CRC-16.
+ * Saving erases first, so power lost during a save loses that slot. Not tried on a unit. ---- */
 #define KS_STORE_SLOTS 31
 #define KS_STORE_MAX (KS_FLASH_SECTOR - 8)
 int ks_store_save(int slot, const void *data, uint32_t len);       /* 0 or a KS_FLASH_ code */

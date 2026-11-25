@@ -11,7 +11,7 @@
  *   1 start   id[3], size u32, block u16
  *   2 data    address u32, 256 bytes, crc16 u16 of the address and the bytes
  *   3 blank   address u32, length u32 (all 0xFF), crc16 u16 of both
- *   4 end     crc32 u32 of the whole chip */
+ *   4 end     crc32 u32 of the whole 32 KiB */
 #include "keystep.h"
 
 #define BLOCK 256u

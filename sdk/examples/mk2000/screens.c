@@ -238,7 +238,7 @@ static void step_record_screen(void) {
 }
 
 static void splash(void) {
-    text(SMALL, 0, TOP, "Arturia");
+    text(SMALL, 0, TOP, "Unofficial");
     right(SMALL, TOP, ks_version);
     text(LARGE, (KS_OLED_W - ks_font_width(LARGE, "KeyStep MK2000")) / 2, MID + 2, "KeyStep MK2000");
 }

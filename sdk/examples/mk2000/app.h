@@ -33,7 +33,7 @@ typedef struct {
     uint8_t redraw;
     const char *message;        /* shown in the big line until message_until */
     uint32_t message_until;
-    uint32_t mutate_at;         /* when Mutate went down for the variation playing now, while it is still held; else 0 */
+    uint32_t mutate_at;         /* when Mutate went down, while it is held and a variation is to come; else 0 */
     mk_chain chain;             /* the chain of bank chain_bank, the bank in use */
     uint8_t chain_bank;
     uint8_t chain_dirty;        /* changed since it was last saved */
@@ -61,7 +61,8 @@ void app_save(int slot);
 void app_reload(void);
 void app_snapshot(void);                        /* remember the selected track for Undo */
 void app_undo(void);
-void app_mutate(void);                          /* the selected track: a new variation of what it was */
+void app_mutate_begin(void);                    /* Mutate went down: the helix until it is let go, then the variation */
+void app_mutate(int amount);                    /* the selected track: a new variation of what it was, 1 to 100; 0 keeps the one playing as the track */
 void app_mutate_reset(void);                    /* and back to that */
 int app_mutated(void);                          /* 1 while the selected track is a variation */
 uint32_t app_beat_phase(void);                  /* ticks into the current quarter note, 0 to 95 */
