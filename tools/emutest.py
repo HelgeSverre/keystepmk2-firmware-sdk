@@ -1387,7 +1387,11 @@ def check_mk_step_list() -> str:
     assert longer[:5] == [60, 64, 62, 64, 72], f"with the length at 7 the waiting note plays: {longer}"
     tap(board, "seq")  # a tap still switches the tracks off
     assert played(board, 400) == [], "Seq tapped: tracks off"
+    assert "Seq off" in all_text(board) and "T1" not in small_text(board).split("KBD")[0], (
+        f"and Home says so: {all_text(board)}"
+    )
     tap(board, "seq")
+    assert "Seq off" not in all_text(board) and "T1" in small_text(board), all_text(board)
     return "keys enter notes in the step list, Seq + key goes to a step, steps past the length are edited and wait"
 
 

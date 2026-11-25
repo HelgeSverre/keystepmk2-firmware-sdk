@@ -66,7 +66,8 @@ Bank: 1 | Preset: 3*
 - Top: the tempo, the scale in force if there is one, and the selected track's time division.
 - Middle: the pattern in use. A `*` means it has edits that are not saved.
 - Bottom: the four tracks. The selected one is boxed, an empty one is `--`, a muted one is struck
-  through. At the right is where the keys go: `KBD T1` (the selected track's channel) or `KBD 9`
+  through. With Seq switched off no track plays, muted or not, and this line reads `Seq off`
+  instead: tap Seq to switch the tracks back on. At the right is where the keys go: `KBD T1` (the selected track's channel) or `KBD 9`
   (home channel 9).
 - While it plays, a bar along the bottom shows where the selected track is.
 

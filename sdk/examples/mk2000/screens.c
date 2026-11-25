@@ -61,10 +61,16 @@ static void keys_label(char *at) {
     else put_number(at, app.settings.home_channel + 1);
 }
 
-/* The four tracks: the selected one in a box, muted struck through, empty as dashes. */
+/* The four tracks: the selected one in a box, muted struck through, empty as dashes. With Seq
+ * off no track plays whatever its mute says, so the line says that instead. */
 static void track_line(const char *at_right) {
     const mk_pattern *p = mk_engine_pattern();
     int x = 1;
+    right(SMALL, LOW, at_right);
+    if (!app.settings.seq_on) {
+        text(SMALL, 0, LOW, "Seq off");
+        return;
+    }
     for (int t = 0; t < MK_TRACKS; t++) {
         char name[3] = { 'T', (char)('1' + t), 0 };
         const char *shown = mk_track_used(&p->track[t]) || t == app.track ? name : "--";
@@ -73,7 +79,6 @@ static void track_line(const char *at_right) {
         if (silent) ks_oled_rect(x - 1, LOW + 3, end - x + 1, 1, t != app.track);
         x = end + 5;
     }
-    right(SMALL, LOW, at_right);
 }
 
 static void position_bar(void) {
