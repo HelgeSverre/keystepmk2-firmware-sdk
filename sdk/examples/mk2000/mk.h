@@ -82,7 +82,9 @@ typedef struct {
     uint8_t muted;                      /* 0 or 1 */
     uint8_t follows_transpose;          /* 0 or 1: moves when another track is transposed from the keys */
     int8_t shift;                       /* semitones added to every note, -48 to 48 (the Octave keys add 12) */
-    uint8_t reserved[3];
+    uint8_t spice;                      /* 0 to 100: how far each step's velocity and gate are moved by its dice */
+    uint8_t dice;                       /* which set of random amounts Spice uses; Dice deals another */
+    uint8_t reserved;
     mk_step step[MK_STEPS];
 } mk_track;
 
@@ -97,6 +99,13 @@ typedef struct {
 void mk_pattern_init(mk_pattern *pattern);      /* empty: 120.0 BPM, channels 0-3, 16 steps, 1/16, gate 50, swing 50 */
 int mk_step_used(const mk_step *step);          /* 1 if it holds a note */
 int mk_track_used(const mk_track *track);       /* 1 if any step within its length holds a note */
+
+/* Spice, as measured on the stock firmware: every step has two fixed random amounts, one for its
+ * velocity and one for its gate, and Spice scales them. A step varies the same way on every pass.
+ * At full Spice a velocity moves by up to 24 either way and a gate is anything from 15 % to 320 %
+ * of what it was (never past the end of its step here). */
+int mk_spice_velocity(const mk_track *track, int step, int velocity);  /* 1 to 127 */
+int mk_spice_gate(const mk_track *track, int step, int ticks, int most);       /* 1 to `most` */
 
 /* ---- engine ---- */
 

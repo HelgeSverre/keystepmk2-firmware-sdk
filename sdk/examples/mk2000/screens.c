@@ -192,6 +192,10 @@ static void slots_screen(void) {
     right(SMALL, TOP, "hold + key");
     if (app.message) {
         text(LARGE, 0, MID, app.message);
+    } else if (controls_text()) {                       /* Shift + a strip: the track's gate or Spice */
+        put(put_number(put(line, "T"), app.track + 1), " ");
+        int x = text(LARGE, 0, MID, line);
+        text(LARGE, x, MID, controls_text());
     } else {
         char *at = put_number(put(line, "Preset "), app.slot % 16 + 1);
         if (app.pending_slot != NO_SLOT) put_number(put(at, " > "), app.pending_slot % 16 + 1);

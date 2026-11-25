@@ -484,10 +484,7 @@ def check_mk_track_settings() -> str:
     tap(board, "encoder")
     let_go(board, "seq")
     assert "T1 Settings" in small_text(board), small_text(board)
-    turn(board, 5)  # Direction
-    tap(board, "encoder")
-    turn(board, 1)
-    tap(board, "encoder")
+    menu_set(board, "Direction", 1)
     assert "Reverse" in small_text(board), small_text(board)
     tap(board, "back")
     tap(board, "play", 40, 0)
@@ -1368,6 +1365,75 @@ def check_mk_step_list() -> str:
     return "keys enter notes in the step list, Seq + key goes to a step, steps past the length are edited and wait"
 
 
+def check_mk_spice() -> str:
+    board = mk2000()
+    mk_record_steps(board, ("k7", "k9", "k11", "k12", "k14", "k16", "k18", "k19"))
+
+    def one_pass() -> list[tuple[int, float]]:
+        """(velocity, gate in ms) of the eight steps of a pass from the top."""
+        events, on, out = play_from_top(board, 1040), {}, []
+        for t, _c, n, v in events:
+            if v:
+                on[n] = (t, v)
+            elif n in on:
+                start, velocity = on.pop(n)
+                out.append((start, velocity, t - start))
+        return [(v, g) for _s, v, g in sorted(out)[:8]]
+
+    def strip(which: int, position: float) -> bytes:
+        hold(board, "shift")
+        board.midi_out.clear()
+        board.set_touch(which, position)
+        board.run(120)
+        seen = all_text(board)
+        board.set_touch(which, None)
+        board.run(60)
+        sent_ = bytes(b for b in board.midi_out if b < 0xF8)
+        let_go(board, "shift")
+        return seen, sent_
+
+    plain = one_pass()
+    assert len({v for v, _g in plain}) <= 3 and all(near(g, 62.5, 4) for _v, g in plain), f"before: {plain}"
+    seen, out = strip(0, 1.0)
+    assert "Spice l00 %" in seen and out == b"", f"Shift + Mod strip is Spice and sends nothing: {seen!r} {out.hex()}"
+    spiced = one_pass()
+    velocities, gates = [v for v, _g in spiced], [g for _v, g in spiced]
+    assert max(velocities) - min(velocities) >= 12 and max(gates) - min(gates) >= 30, (
+        f"Spice varies the steps: {spiced}"
+    )
+    assert all(abs(v - p[0]) <= 24 for v, p in zip(velocities, plain, strict=True)), "by 24 at most, as stock"
+    again = one_pass()
+    assert [v for v, _g in again] == velocities, "the same on every pass"
+    hold(board, "shift")
+    for _ in range(3):  # three quick taps on the Spice strip
+        board.set_touch(0, 1.0)
+        board.run(60)
+        board.set_touch(0, None)
+        board.run(120)
+    assert shows(board, "Dice Rolled"), all_text(board)
+    let_go(board, "shift")
+    rolled = [v for v, _g in one_pass()]
+    assert rolled != velocities, f"other amounts after the dice: {rolled}"
+    seen, out = strip(1, 0.0)
+    assert "Gate l0 %" in seen and out == b"", f"Shift + Bend strip is Gate: {seen!r} {out.hex()}"
+    seen, _out = strip(0, 0.0)
+    assert "Spice 0 %" in seen, seen
+    short = one_pass()
+    assert all(near(g, 12.5, 6) for _v, g in short) and [v for v, _g in short] == [v for v, _g in plain], (
+        f"gate 10 %: {short}"
+    )
+    board.set_touch(0, 0.5)  # without Shift the strips are Mod and Bend again
+    assert sent(board) == bytes([0xB0, 1, 0x3F]), "the Mod strip without Shift still sends CC 1"
+    board.set_touch(0, None)
+    hold(board, "seq")
+    tap(board, "encoder")
+    let_go(board, "seq")
+    menu_set(board, "Spice", 10)
+    tap(board, "back")
+    assert len({v for v, _g in one_pass()}) > 3, "Spice in track settings"
+    return "Shift + strips set Gate and Spice and send nothing, Spice varies each step the same every pass, three taps roll the dice"
+
+
 def check_mk_scale() -> str:
     board = mk2000()
     shift_key(board, "chord")
@@ -1925,6 +1991,7 @@ CHECKS = {
     "mk2000 cv": check_mk_cv,
     "mk2000 shared notes": check_mk_shared_notes,
     "mk2000 step list": check_mk_step_list,
+    "mk2000 spice": check_mk_spice,
     "mk2000 scale": check_mk_scale,
     "mk2000 chord": check_mk_chord,
     "mk2000 arp settings": check_mk_arp_settings,

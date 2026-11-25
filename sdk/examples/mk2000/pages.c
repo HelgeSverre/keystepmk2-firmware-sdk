@@ -14,7 +14,7 @@
 
 enum { LIST, INSIDE };          /* the step page's levels */
 enum { F_VELOCITY, F_GATE, F_PROBABILITY, F_RATCHET, F_CONDITION, F_TIE, F_OFFSET, FIELDS };
-enum { T_CHANNEL, T_LENGTH, T_DIVISION, T_SWING, T_GATE, T_DIRECTION, T_FOLLOWS, T_SHIFT, T_QUANTIZE, T_CLEAR_AUTOM,
+enum { T_CHANNEL, T_LENGTH, T_DIVISION, T_SWING, T_GATE, T_SPICE, T_DIRECTION, T_FOLLOWS, T_SHIFT, T_QUANTIZE, T_CLEAR_AUTOM,
        TRACK_ENTRIES };
 enum { G_BRIGHTNESS, G_PATTERN_CHANGE, G_TEMPO, G_OVERDUB, G_REC_QUANTIZE, G_REC_AUTOM, G_KEYS, G_HOME_CHANNEL,
        G_AFTERTOUCH, G_SYNC, G_DIN_THRU, G_USB_THRU, G_CV, G_ABOUT, GLOBAL_ENTRIES };
@@ -80,6 +80,7 @@ static const entry track_entries[TRACK_ENTRIES] = {
     { "Time Div", 0, MK_DIV_COUNT - 1, 1, mk_div_name, 0, 0 },
     { "Swing", 50, 75, 1, 0, " %", 0 },
     { "Gate", 10, 90, 5, 0, " %", 0 },
+    { "Spice", 0, 100, 5, 0, " %", 0 },
     { "Direction", 0, MK_DIR_COUNT - 1, 1, directions, 0, 0 },
     { "Follows transpose", 0, 1, 1, off_on, 0, 0 },
     { "Shift", -48, 48, 1, 0, " st", 0 },
@@ -254,6 +255,7 @@ static int track_get(int which) {
     case T_DIVISION: return t->division;
     case T_SWING: return t->swing;
     case T_GATE: return t->gate;
+    case T_SPICE: return t->spice > 100 ? 100 : t->spice;
     case T_DIRECTION: return t->direction;
     case T_FOLLOWS: return t->follows_transpose;
     case T_QUANTIZE: return quantize_strength;
@@ -279,6 +281,7 @@ static void track_set(int which, int value) {
     case T_DIVISION: t->division = (uint8_t)value; break;
     case T_SWING: t->swing = (uint8_t)value; break;
     case T_GATE: t->gate = (uint8_t)value; break;
+    case T_SPICE: t->spice = (uint8_t)value; break;
     case T_DIRECTION: t->direction = (uint8_t)value; break;
     case T_FOLLOWS: t->follows_transpose = (uint8_t)value; break;
     default: t->shift = (int8_t)value; break;

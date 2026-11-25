@@ -570,7 +570,9 @@ static void encode_pattern(const void *data) {
         put(track->muted);
         put(track->follows_transpose);
         put((uint8_t)track->shift);
-        put_n(track->reserved, 3);
+        put(track->spice);
+        put(track->dice);
+        put(track->reserved);
         for (int s = 0; s < MK_STEPS; s++)
             if (step_fields(&track->step[s], &notes, &controllers)) mask[s / 32] |= 1u << s % 32;
         for (int i = 0; i < 8; i++) put((uint8_t)(mask[i / 4] >> 8 * (i % 4)));
@@ -633,7 +635,9 @@ static void decode_pattern(mk_pattern *pattern) {
         track->muted = get();
         track->follows_transpose = get();
         track->shift = (int8_t)get();
-        get_n(track->reserved, 3);
+        track->spice = get();
+        track->dice = get();
+        track->reserved = get();
         get_n(mask, 8);
         for (int s = 0; s < MK_STEPS && !in.error; s++)
             if (mask[s / 8] >> s % 8 & 1) decode_step(&track->step[s]);

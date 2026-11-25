@@ -668,6 +668,71 @@ static void test_record_controllers(void) {
     ok("controllers recorded into the step being played", before);
 }
 
+/* Spice moves each step's velocity and gate by that step's own fixed amounts: the same on every
+ * pass, other amounts after Dice, nothing at Spice 0, and in proportion to Spice. */
+static void test_spice(void) {
+    int before = failures;
+    int at_full[8][2], at_half[8][2];
+    for (int round = 0; round < 3; round++) {
+        setup();
+        pa.track[0].length = 8;
+        pa.track[0].spice = (uint8_t)(round == 0 ? 0 : round == 1 ? 100 : 50);
+        for (int s = 0; s < 8; s++) set_note(&pa, 0, s, (uint8_t)(60 + s));
+        mk_engine_start();
+        run(2 * 8 * 24);
+        int n = 0;
+        for (int i = 0; i < logged; i++) {
+            if (log_[i].kind != ON) continue;
+            int off = -1;
+            for (int j = i + 1; j < logged && off < 0; j++)
+                if (log_[j].kind == OFF && log_[j].a == log_[i].a) off = (int)(log_[j].tick - log_[i].tick);
+            int step = n % 8, velocity = log_[i].b;
+            CHECK_EQ(log_[i].tick, (uint32_t)n * 24);   /* Spice never moves a step in time */
+            if (round == 0) {
+                CHECK_EQ(velocity, 100);
+                CHECK_EQ(off, 12);
+            } else if (n < 8) {
+                (round == 1 ? at_full : at_half)[step][0] = velocity;
+                (round == 1 ? at_full : at_half)[step][1] = off;
+            } else {                                    /* the second pass: the same again */
+                CHECK_EQ(velocity, (round == 1 ? at_full : at_half)[step][0]);
+                CHECK_EQ(off, (round == 1 ? at_full : at_half)[step][1]);
+            }
+            n++;
+        }
+        CHECK_EQ(n, 16);
+        CHECK_EQ(doubled, 0);
+        CHECK_EQ(unmatched, 0);
+    }
+    int low = 127, high = 0, shortest = 999, longest = 0, differ = 0;
+    for (int s = 0; s < 8; s++) {
+        if (at_full[s][0] < low) low = at_full[s][0];
+        if (at_full[s][0] > high) high = at_full[s][0];
+        if (at_full[s][1] < shortest) shortest = at_full[s][1];
+        if (at_full[s][1] > longest) longest = at_full[s][1];
+        CHECK(at_full[s][0] >= 76 && at_full[s][0] <= 124);             /* 100 +- 24 */
+        CHECK(at_full[s][1] >= 1 && at_full[s][1] <= 24);               /* never past its step */
+        int half = at_half[s][0] - 100, full = at_full[s][0] - 100;
+        CHECK(half * 2 >= full - 2 && half * 2 <= full + 2);            /* half the Spice, half the way */
+        differ += at_full[s][0] != 100;
+    }
+    CHECK(high - low >= 12 && longest - shortest >= 6 && differ >= 6);  /* it does vary */
+    mk_track dealt = pa.track[0];
+    dealt.spice = 100;
+    int same = 0;
+    for (int s = 0; s < 8; s++) {
+        dealt.dice = 0;
+        int was = mk_spice_velocity(&dealt, s, 100);
+        dealt.dice = 1;
+        same += was == mk_spice_velocity(&dealt, s, 100);
+    }
+    CHECK(same <= 2);                                   /* Dice: other amounts */
+    dealt.spice = 255;                                  /* out of range reads as 100 */
+    CHECK(mk_spice_velocity(&dealt, 0, 100) >= 76 && mk_spice_gate(&dealt, 0, 12, 24) >= 1);
+    CHECK_EQ(mk_spice_gate(&dealt, 3, 12, 5) <= 5, 1);
+    ok("Spice: fixed amounts per step, in proportion, the same each pass, new with the dice", before);
+}
+
 static void test_switch(void) {
     int before = failures;
     setup();
@@ -1300,6 +1365,7 @@ int main(void) {
     test_range();
     test_controllers();
     test_record_controllers();
+    test_spice();
     test_switch();
     test_record();
     test_edited();

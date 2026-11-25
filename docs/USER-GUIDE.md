@@ -102,7 +102,7 @@ Nothing is saved by itself. The `*` on the home screen tells you there is someth
 
 **Track settings** (Seq + encoder click): Channel, Length, Time Div, Swing (50–75 %), Gate
 (10–90 %), Direction (Forward, Reverse, Pendulum, Random), Follows transpose, Shift (−48 to +48
-semitones), Quantize and Clear Autom. Turn to move, click to edit, turn to change, click or Back
+semitones), Spice, Quantize and Clear Autom. Turn to move, click to edit, turn to change, click or Back
 to finish.
 
 ### MIDI channels
@@ -259,6 +259,13 @@ Pentatonic Major, Pentatonic Minor, Japanese, Gypsy, Arabic, Freygish.
 | Mod strip | Mod wheel (CC 1). It stays where you leave it |
 | Pedal | Sustain (CC 64) |
 | Aftertouch | Channel pressure. Aft Sensitivity in global settings: Off, Low, Medium, High |
+| Shift + Bend strip | **Gate** of the selected track, short at the bottom, long at the top. Sends nothing |
+| Shift + Mod strip | **Spice** of the selected track. Sends nothing |
+| Shift + three quick taps on the Mod strip | **Dice** |
+
+**Spice** gives every step of the track its own change of velocity and gate length: a little at
+the bottom of the strip, a lot at the top. The change is the same every time round, so it is a
+variation you can keep, not noise. **Dice** deals new changes. Spice is also in track settings.
 
 **Shift + Hold** is Transpose Hold: the keys transpose the selected track instead of playing.
 
@@ -377,6 +384,5 @@ MK2000 patterns fit, depending on how full they are; About shows the free memory
 
 ## Not there yet
 
-- Arturia's Spice and Dice, and the strips' Gate and Spice functions
 - The User scale and the chord Voicing `On`
 - CV calibration, vibrato

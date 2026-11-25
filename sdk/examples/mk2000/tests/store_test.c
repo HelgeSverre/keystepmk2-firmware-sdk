@@ -204,8 +204,8 @@ static int same_pattern(const mk_pattern *a, const mk_pattern *b) {
         const mk_track *x = &a->track[t], *y = &b->track[t];
         if (x->channel != y->channel || x->length != y->length || x->division != y->division || x->swing != y->swing ||
             x->gate != y->gate || x->direction != y->direction || x->muted != y->muted ||
-            x->follows_transpose != y->follows_transpose || x->shift != y->shift || x->reserved[0] != y->reserved[0] ||
-            x->reserved[1] != y->reserved[1] || x->reserved[2] != y->reserved[2]) {
+            x->follows_transpose != y->follows_transpose || x->shift != y->shift || x->spice != y->spice ||
+            x->dice != y->dice || x->reserved != y->reserved) {
             SAY("  track %d fields differ\n", t);
             return 0;
         }
@@ -226,8 +226,7 @@ static int same_pattern(const mk_pattern *a, const mk_pattern *b) {
 
 static int reserved_zero(const mk_pattern *p) {
     for (int t = 0; t < MK_TRACKS; t++)
-        for (int i = 0; i < 3; i++)
-            if (p->track[t].reserved[i]) return 0;
+        if (p->track[t].spice || p->track[t].dice || p->track[t].reserved) return 0;
     return 1;
 }
 

@@ -225,8 +225,10 @@ static void play_hit(int t) {
     int percent = st->gate ? st->gate : tr->gate;
     if (percent < 1) percent = 1;
     if (percent > 100) percent = 100;
-    int gate = (part_start(s, part + 1) - part_start(s, part)) * percent / 100;
+    int whole = part_start(s, part + 1) - part_start(s, part);
+    int gate = whole * percent / 100;
     if (gate < 1) gate = 1;
+    if (tr->spice) gate = mk_spice_gate(tr, s->cur, gate, whole < 1 ? 1 : whole);
     if (part == s->hits - 1 && (st->flags & MK_STEP_TIE)) gate = HOLD;
     uint8_t channel = tr->channel & 15;
     for (int i = 0; i < MK_POLY; i++) {
@@ -239,7 +241,8 @@ static void play_hit(int t) {
         }
         if (e && e->track != t) continue;               /* never the same note on twice */
         if (e) note_off(e);
-        note_on(t, channel, (uint8_t)pitch, st->velocity[i], (uint16_t)gate);
+        int velocity = tr->spice ? mk_spice_velocity(tr, s->cur, st->velocity[i]) : st->velocity[i];
+        note_on(t, channel, (uint8_t)pitch, (uint8_t)velocity, (uint16_t)gate);
     }
 }
 

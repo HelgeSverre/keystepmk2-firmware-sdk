@@ -8,7 +8,11 @@
  * Aftertouch and the pedal have only been seen in the emulator, where the stock firmware sent
  * nothing for either, so their levels on a device are not known. Both are therefore read against
  * what they show at rest: pressure counts from the level with no key down, the pedal from its
- * level at start-up, whichever way either moves. */
+ * level at start-up, whichever way either moves.
+ *
+ * With Shift held the strips are the stock firmware's Gate and Spice: the Bend strip sets the
+ * selected track's gate, the Mod strip its Spice, where the finger is, and nothing is sent. Three
+ * taps on the Spice strip within half a second of each other roll the dice. */
 #include "app.h"
 
 #define CENTRE 8192
@@ -21,6 +25,61 @@ static uint32_t sprung_at;
 static int16_t rest[2] = { -1, -1 };    /* aftertouch, pedal: the level with nothing pressed */
 static uint8_t snapped;         /* this recording has its Undo snapshot */
 static int8_t written[MK_CONTROLLERS] = { -1, -1, -1, -1 };
+static char shown[16];          /* "Gate 45 %" or "Spice 30 %", while a strip is used with Shift */
+static uint32_t shown_until;
+static uint8_t shift_touch[2];  /* a finger is on the strip with Shift held */
+static uint8_t taps;
+static uint32_t tapped_at;
+
+static void show(const char *name, int value, uint32_t now) {
+    put(put_number(put(put(shown, name), " "), value), " %");
+    shown_until = now + 1200;
+    app.redraw = 1;
+}
+
+const char *controls_text(void) { return shown[0] && (int32_t)(ks_millis() - shown_until) < 0 ? shown : 0; }
+
+/* Shift + a strip. Returns 1 while Shift owns the strip, so it sends nothing. */
+static int shifted(int strip, uint32_t now) {
+    int at = ks_touch(strip), index = strip == KS_STRIP_BEND;
+    if (!(ks_buttons() & KS_BTN_SHIFT)) {
+        if (!shift_touch[index]) return 0;
+        if (at < 0) shift_touch[index] = 0;             /* Shift went first: the finger still does nothing */
+        return 1;
+    }
+    mk_track *track = &mk_engine_pattern()->track[app.track];
+    if (at < 0) {
+        shift_touch[index] = 0;
+        return 1;
+    }
+    if (strip == KS_STRIP_BEND) {
+        int gate = 10 + (at * 80 + 127) / 255;
+        if (gate != track->gate) {
+            track->gate = (uint8_t)gate;
+            app.dirty = 1;
+        }
+        show("Gate", gate, now);
+    } else {
+        if (!shift_touch[index]) {                      /* a finger came down: the third of three quick taps rolls the dice */
+            taps = (uint8_t)(now - tapped_at <= 500 ? taps + 1 : 1);
+            tapped_at = now;
+            if (taps >= 3) {
+                taps = 0;
+                track->dice = (uint8_t)(track->dice + 1 + app_random() % 255);  /* never the same again */
+                app.dirty = 1;
+                app_message("Dice Rolled");
+            }
+        }
+        int spice = (at * 100 + 127) / 255;
+        if (spice != track->spice) {
+            track->spice = (uint8_t)spice;
+            app.dirty = 1;
+        }
+        show("Spice", spice, now);
+    }
+    shift_touch[index] = 1;
+    return 1;
+}
 
 /* Into the step being played, once per value. */
 static void record(int which, int value) {
@@ -42,7 +101,7 @@ static void send_bend(uint8_t channel, int value) {
 }
 
 static void bend_poll(uint8_t channel, uint32_t now) {
-    int at = ks_touch(KS_STRIP_BEND);
+    int at = shifted(KS_STRIP_BEND, now) ? -1 : ks_touch(KS_STRIP_BEND);
     if (at >= 0) {
         int want = at >= 126 && at <= 129 ? CENTRE : at * 16383 / 255;
         touching = 1;
@@ -57,8 +116,8 @@ static void bend_poll(uint8_t channel, uint32_t now) {
     }
 }
 
-static void mod_poll(uint8_t channel) {
-    int at = ks_touch(KS_STRIP_MOD);
+static void mod_poll(uint8_t channel, uint32_t now) {
+    int at = shifted(KS_STRIP_MOD, now) ? -1 : ks_touch(KS_STRIP_MOD);
     if (at < 0 || at >> 1 == mod) return;
     mod = at >> 1;
     uint8_t message[3] = { (uint8_t)(0xB0 | channel), 1, (uint8_t)mod };
@@ -111,7 +170,7 @@ void controls_poll(uint32_t now) {
         for (int c = 0; c < MK_CONTROLLERS; c++) written[c] = -1;
     }
     bend_poll(channel, now);
-    mod_poll(channel);
+    mod_poll(channel, now);
     if (!ready_at) ready_at = now + 50;                 /* the analog inputs are first read a few ms after start */
     if ((int32_t)(now - ready_at) < 0) return;
     pressure_poll(channel);

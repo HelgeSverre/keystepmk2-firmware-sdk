@@ -76,6 +76,7 @@ void cv_poll(uint32_t now);
 
 /* controls.c */
 void controls_poll(uint32_t now);               /* the strips, aftertouch and the pedal */
+const char *controls_text(void);                /* "Gate 45 %" while Shift + a strip is in use, or NULL */
 
 /* ui.c */
 void ui_poll(void);

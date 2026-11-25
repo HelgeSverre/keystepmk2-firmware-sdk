@@ -225,3 +225,34 @@ register values, not volts.
   599, 612); Pulse 1545 at 10 ms after the key and 0 at 20 ms.
 - **Mod Max Volt**: the top of the output is 309 per volt: 309 at 1 V, 1545 at 5 V, and the strip
   half way at 10 V gives 1545.
+
+## Gate, Spice and Dice
+
+Stock 1.0.2 in the emulator, Seq mode, eight steps of a sixteenth playing at 120 BPM (125 ms a
+step), default settings.
+
+- **Shift + Bend strip** shows `Gate | Spice` with a bar and sets the gate length by where the
+  finger is: 8 ms at the bottom, 22 ms a quarter up, 52 ms three quarters up, 69 ms at the top.
+  The default (MIDI Control Center shows `Gate 50`) is 38 ms. So the gate is about 8 ms + 0.6 ms
+  per point of a 0-to-100 value at this step length, and it stays where it was left. No MIDI is
+  sent for the strip.
+- **Shift + Mod strip** sets Spice the same way, and sends nothing. With Spice above 0 each step
+  plays with another velocity and gate, the same on every pass:
+
+  | Strip | Velocities (were 97 to 100) | Gates (were 38 ms) |
+  |---|---|---|
+  | a quarter up | 93 to 106 | 29 to 66 ms |
+  | half way | 89 to 112 | 21 to 98 ms |
+  | the top | 80 to 124 | 6 to 122 ms |
+
+  A step's change is in proportion to the strip: the step that gained 6 at a quarter gained 12 at
+  half and 24 at the top. Timing and notes did not change. Back at the bottom the steps play as
+  recorded.
+- **Dice**: with Shift held, three taps on the Mod strip within half a second of each other show
+  `Dice Rolled` [0x0804F178 counts presses 501 ms apart, and on the third seeds a new random
+  number]; the steps then vary by other amounts. Three taps without Shift, or on the Bend strip,
+  do nothing.
+- Also seen: Shift + Tempo shows `Seq Length`; the Shift + edit keys show `Time Div:`, `Nudge`,
+  `Transpose`, `Pattern Doubled`, `Pattern Quantized`, `Pattern Reloaded`, `Pattern Cleared`,
+  `Pattern Undo`.
+

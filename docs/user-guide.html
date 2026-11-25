@@ -273,7 +273,7 @@ svg.unitsvg .ubtn[data-b]:focus-visible rect:last-of-type { stroke: var(--blue);
       <div class="tw"><table>
         <tr><td>Channel</td><td>1–16</td></tr><tr><td>Length</td><td>1–64 steps</td></tr>
         <tr><td>Time Div</td><td>1/2 to 1/32, dotted and triplet</td></tr><tr><td>Swing</td><td>50–75 %</td></tr>
-        <tr><td>Gate</td><td>10–90 %</td></tr><tr><td>Direction</td><td>Forward, Reverse, Pendulum, Random</td></tr>
+        <tr><td>Gate</td><td>10–90 %</td></tr><tr><td>Spice</td><td>0–100 %</td></tr><tr><td>Direction</td><td>Forward, Reverse, Pendulum, Random</td></tr>
         <tr><td>Follows transpose</td><td>Moves when another track is transposed</td></tr><tr><td>Shift</td><td>−48 to +48 semitones</td></tr>
         <tr><td>Quantize</td><td>50 % or 100 %</td></tr><tr><td>Clear Autom</td><td>Bend, Mod, Aftertouch, Pedal, All</td></tr>
       </table></div>
@@ -325,6 +325,9 @@ svg.unitsvg .ubtn[data-b]:focus-visible rect:last-of-type { stroke: var(--blue);
         <div class="g"><div class="c">Mod strip</div><div class="d">Mod wheel, CC 1. Stays where you leave it.</div></div>
         <div class="g"><div class="c">Pedal</div><div class="d">Sustain, CC 64.</div></div>
         <div class="g"><div class="c">Aftertouch</div><div class="d">Channel pressure.</div></div>
+        <div class="g"><div class="c"><kbd class="sh">Shift</kbd> + Bend strip</div><div class="d"><b>Gate</b> of the selected track: short at the bottom, long at the top. Sends nothing.</div></div>
+        <div class="g"><div class="c"><kbd class="sh">Shift</kbd> + Mod strip</div><div class="d"><b>Spice</b>: each step gets its own change of velocity and gate, the same every time round.</div></div>
+        <div class="g"><div class="c"><kbd class="sh">Shift</kbd> + three taps on the Mod strip</div><div class="d"><b>Dice</b>: new changes for every step.</div></div>
       </div>
     </div>
     <div style="display:flex;flex-direction:column;gap:10px">
@@ -335,7 +338,7 @@ svg.unitsvg .ubtn[data-b]:focus-visible rect:last-of-type { stroke: var(--blue);
     <div style="display:flex;flex-direction:column;gap:10px">
       <h2>Memory</h2>
       <p>MK2000 keeps its patterns where Arturia's firmware never looks, and never touches Arturia's patterns, settings or calibration. Switch between the two as often as you like: each finds its own as it left them.</p>
-      <p class="small">Installing and going back: <a href="FLASHING.md">FLASHING.md</a>. Not built yet: Spice and Dice, the strips' Gate and Spice functions, the User scale, vibrato, CV calibration.</p>
+      <p class="small">Installing and going back: <a href="FLASHING.md">FLASHING.md</a>. Not built yet: the User scale, vibrato, CV calibration.</p>
     </div>
   </div>
 </section>
@@ -385,7 +388,8 @@ svg.unitsvg .ubtn[data-b]:focus-visible rect:last-of-type { stroke: var(--blue);
       spans: [[0, 3, "bank", "Bank"], [4, 19, "num", "Pattern 1–16 of the bank"], [20, 22, "edit", "Time Div"], [23, 24, "edit", "Nudge"], [25, 26, "edit", "Octave"], [27, 31, "edit", "Double, Quant, Reload, Clear, Undo"]],
       label: function (k) { return k < 4 ? "B" + (k + 1) : k < 20 ? String(k - 3) : EDIT[k - 20]; },
       notes: ["The edit keys act on the selected track; Reload brings back the whole saved pattern.", "A pattern takes over when track 1 next wraps.",
-        "With Shift, the buttons do what is printed under them in blue: Save, Reset, Scale, Length, Overdub, Chain. Shift + Hold is Transpose Hold."] },
+        "With Shift, the buttons do what is printed under them in blue: Save, Reset, Scale, Length, Overdub, Chain. Shift + Hold is Transpose Hold.",
+        "With Shift, the strips are what is printed in blue under them: Gate and Spice. Three quick taps on Spice roll the dice."] },
     chan: { held: ["shift", "stop"], title: "Hold Shift + Stop: MIDI channels",
       spans: [[0, 3, "bank", "Pick a track first"], [4, 19, "num", "MIDI channel 1–16"]],
       label: function (k) { return k < 4 ? "T" + (k + 1) : k < 20 ? String(k - 3) : null; },
