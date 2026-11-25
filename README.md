@@ -89,3 +89,12 @@ Flashing has been done on one 32-key unit, with a recovery path proven there
 ([FLASHING](docs/FLASHING.md)). Other units, the 37-key model and other bootloader revisions are
 untried: read that file first, take the copy of the external flash it describes, and keep to the
 "never send" list.
+
+## Licence
+
+The tools, the SDK, the examples and the notes are under the MIT licence ([LICENSE](LICENSE)).
+That does not cover Arturia's firmware, which is not in this repository: `just fetch` downloads
+the published packages from Arturia, and anything read from a unit stays in the git-ignored
+`firmware/device/`. The Barlow fonts in `tools/assets` are under the SIL Open Font License
+(`tools/assets/OFL.txt`).
+
