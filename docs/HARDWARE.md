@@ -28,7 +28,7 @@ same init routine.
 | Display | 128×32 monochrome OLED, SSD1306 command set, SPI1 (write-only), 512-byte frame buffer |
 | LEDs | 54 addressable RGB LEDs (WS2812-type protocol, GRB) in two chains of 39 and 15, TIM16_CH1 PWM + DMA on one data pin, two chain-select pins |
 | Keybed | 4 select lines × 8 return lines, two contacts per key, one scan phase per 65 µs TIM7 interrupt |
-| Aftertouch, pedal | ADC1 channels 1 and 0 |
+| Aftertouch, pedal | ADC1 channels 0 and 1 |
 | Buttons | 16 inputs on a parallel-in shift register chain read over SPI3 (receive-only) |
 | Encoders | 5 quadrature encoders in a 3-select × 2-pair GPIO matrix |
 | Touch strips | I2C1 device at 7-bit address 0x15, interrupt line and reset line |
@@ -71,8 +71,8 @@ written before the pins are switched to output.
 
 | Pin | Mode | Pull | AF | Init | Function | Tag |
 |-----|------|------|----|------|----------|-----|
-| PA0 | analog | – | – | – | ADC1 IN0: pedal input [0x08019ccc] | V pin, I function |
-| PA1 | analog | – | – | – | ADC1 IN1: aftertouch sensor [0x08019ccc, 0x08016a40] | V |
+| PA0 | analog | – | – | – | ADC1 IN0: aftertouch sensor [0x08019ccc] | V pin, I function (see Pedal) |
+| PA1 | analog | – | – | – | ADC1 IN1: pedal socket [0x08019ccc, 0x08016a40] | V |
 | PA2 | input, EXTI2 both edges | none | – | – | Sync in, line 2 (reads inverted) [0x080162e8] | V |
 | PA3 | input, EXTI3 both edges | none | – | – | Sync in, line 1 (reads inverted), pulses time-stamped [0x080162f8, 0x0805a2e8] | V |
 | PA4 | analog | – | – | – | DAC1 OUT1: CV mod [0x08019de8] | V |
@@ -234,9 +234,10 @@ EXTI4_15 is not enabled in the NVIC: lines 6 and 15 only latch pending flags.
 - Velocity: the microsecond time (TIM17) is stored when the first contact closes; when the
   second closes, `(t2 − t1) × 10 / divisor` is queued with the key number (bit 7 set = note on).
   Release works the same way in reverse (V). Events go to an 8-byte-per-entry ring.
-- Aftertouch: a single analog value on ADC1 channel 1 (PA1), not per key. The min/max
-  calibration [0x08016a40, 0x08016a90] reads sample index 1 of the ADC buffer (V); files
-  `calib/aft_factory` and `calib/aft_user`.
+- Aftertouch: a single analog value on ADC1 channel 0 (PA0), not per key (I: the other channel
+  is the pedal, V, see Pedal). Its range object is at 0x20019d38: minimum and maximum come from
+  `calib/aft_factory`, then `calib/aft_user` [0x08016f98]; with neither file the defaults are
+  600 and 3100 (V). The level is near 0 with no key pressed (device: 0 to 4).
 
 ## Buttons [0x080135b4]
 
@@ -356,9 +357,20 @@ USART1 on PC4 (TX) and PC5 (RX), 31250 baud, 8N1 (V). Receive runs by circular D
 
 ## Pedal
 
-ADC1 channel 0 on PA0 is the only analog input besides aftertouch, and the menu has one "Pedal
-Input" with Expression, Sustain and AutoDetect, so the pedal jack is read by the ADC (I).
-Calibration file `calib/expr_pdl`.
+The pedal socket is ADC1 channel 1 on PA1: the routines that set the pedal's minimum and
+maximum [0x08016a40, 0x08016a90] read sample index 1 of the ADC buffer, and their range object
+(0x20019c90) is the one loaded from `calib/expr_pdl` [0x08016ff0] (V; the loader's path object
+0x20019bc8 is given that name at 0x0801576c). Without the file the range is 470 to 3300, middle
+1885 (V). The ADC converts channel 0 then 1 in fixed forward order into a two-sample buffer
+[0x08019c30], so index 0 is PA0.
+
+With nothing plugged in the input reads full scale (device: 4086 to 4095), so the socket is
+pulled up. The menu has one "Pedal Input" with Expression, Sustain and AutoDetect.
+
+Earlier versions of this file had the two channels the other way round. The SDK's self-test on
+a unit showed it: "aftertouch" stood at 4091 and did not move under pressure, and "pedal" stood
+at 0 with a switch pedal pressed. This unit has no `calib/aft_factory`, `calib/aft_user` or
+`calib/expr_pdl`, so the stock firmware runs on the defaults above.
 
 ## External flash [0x08018574, 0x08017f08, 0x0801788c, 0x080188a0]
 
@@ -537,7 +549,7 @@ on; "Tempo / Bank / Preset" in Seq mode; "Arp | Up" in Arp mode; the Global Sett
 - Which shift register bit is which button; which encoder object is which knob; where the
   encoder push switches are read.
 - The purpose of PA15 (input, pull-down, EXTI 15 rising, polled).
-- Which of PA0 and the pedal jack contacts does what; how sustain and expression are told apart.
+- How sustain and expression pedals are told apart on PA1, and which way a switch pedal moves it.
 - The jack wiring and the analog stages behind the sync, gate, pitch and mod pins (voltage
   ranges, filters, gate format switching).
 - The unit of the tempo value and the tick resolution of TIM2.

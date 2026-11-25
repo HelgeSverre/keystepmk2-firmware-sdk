@@ -5,10 +5,10 @@
  * The Bend strip is the stock one: where the finger is, 14 bits, and back to the centre over a
  * tenth of a second when it is let go. The Mod strip sends CC 1 and stays where it was left.
  *
- * Aftertouch and the pedal have only been seen in the emulator, where the stock firmware sent
- * nothing for either, so their levels on a device are not known. Both are therefore read against
- * what they show at rest: pressure counts from the level with no key down, the pedal from its
- * level at start-up, whichever way either moves.
+ * On a unit the aftertouch strip reads near 0 with no key pressed and the pedal socket reads
+ * full scale with nothing plugged in; how far either moves has not been measured. Both are
+ * therefore read against what they show at rest: pressure counts from the level with no key
+ * down, the pedal from its level at start-up, whichever way either moves.
  *
  * With Shift held the strips are the stock firmware's Gate and Spice: the Bend strip sets the
  * selected track's gate, the Mod strip its Spice, where the finger is, and nothing is sent. Three

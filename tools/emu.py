@@ -436,7 +436,7 @@ class Board:
         self.dma_due: dict[int, float] = {}  # transfers in flight: when each completes
         self.dma_seen: dict[int, str] = {}
         self.tim2_count = 0  # TIM2 while it counts TIM3's overflows instead of the clock
-        self.adc = [0, 0]  # 12-bit levels at the pedal input (channel 0) and the aftertouch strip (1)
+        self.adc = [0, 0]  # 12-bit levels at the aftertouch strip (channel 0) and the pedal socket (1)
         self.sync_in: list[bool | None] = [None, None]  # clock, run: driven by a cable, or None
         self.usb = usbmodel.Usb(self)
 
@@ -1037,7 +1037,7 @@ def act(board: Board, action: str) -> None:
     elif name[:4] == "knob" and name[4:] in ("1", "2", "3", "4"):  # the 37-key model's knobs
         board.turn(int(arg), int(name[4:]))
     elif name in ("pedal", "aftertouch"):
-        board.adc[name == "aftertouch"] = max(0, min(4095, int(arg)))
+        board.adc[name == "pedal"] = max(0, min(4095, int(arg)))
     elif name in ("clock", "run"):  # the sync input: clock=1, clock=0, or clock=none to unplug
         board.sync(name == "run", None if arg == "none" else arg == "1")
     elif name == "cv":

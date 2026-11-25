@@ -186,7 +186,7 @@ class Human:
 
 def boot(enumerate_usb: bool = True) -> Human:
     human = Human(emutest.sdk("selftest", 20, flash=unit_flash()))
-    human.board.adc[:] = [REST_PEDAL, REST_AFTERTOUCH]
+    human.board.adc[:] = [REST_AFTERTOUCH, REST_PEDAL]
     if enumerate_usb:
         info = human.board.usb.host.enumerate()
         assert info["product_name"] == "KeyStep mk2", info
@@ -263,17 +263,17 @@ def part_good() -> Human:
     human.step(35, "Hold a key, press hard")
     board.press("k12")
     human.run(60)
-    board.adc[1] = 3000
+    board.adc[0] = 3000
     human.run(60)
-    board.adc[1] = REST_AFTERTOUCH
+    board.adc[0] = REST_AFTERTOUCH
     board.release("k12")
 
     human.step(36, "Pedal plugged in")
     human.tap("play")
     human.step(36, "Press the pedal")
-    board.adc[0] = 3500
+    board.adc[1] = 3500
     human.run(100)
-    board.adc[0] = REST_PEDAL
+    board.adc[1] = REST_PEDAL
 
     human.step(37, "MIDI cable Out > In", 8000)
     human.cable = True

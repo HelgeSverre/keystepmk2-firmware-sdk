@@ -68,8 +68,8 @@ int ks_sync_pulses(void) {
     return n;
 }
 
-/* ---- analog inputs: the pedal on ADC channel 0 (PA0) and the aftertouch strip on channel 1
- * (PA1), converted in turn from the 1 ms tick ---- */
+/* ---- analog inputs: the aftertouch strip on ADC channel 0 (PA0) and the pedal socket on
+ * channel 1 (PA1), as the stock firmware's calibration code and a real unit show; converted in turn from the 1 ms tick ---- */
 
 static volatile uint16_t analog[2];
 static volatile uint32_t conversions;
@@ -91,8 +91,8 @@ void analog_tick_1ms(void) {
     }
 }
 
-int ks_pedal(void) { return analog[0]; }
-int ks_aftertouch(void) { return analog[1]; }
+int ks_aftertouch(void) { return analog[0]; }
+int ks_pedal(void) { return analog[1]; }
 uint32_t ks_analog_count(void) { return conversions; }
 
 void cv_init(void) {

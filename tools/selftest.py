@@ -260,13 +260,14 @@ def decode_stream(stream: bytes, echo=None) -> Report:
     return report
 
 
-def clock_check(pongs: list[tuple[int, int, int, float | None]], sent: dict[int, float]) -> dict | None:
+def clock_check(answers: list[tuple[float, float, int]]) -> dict | None:
     """The unit's clock against this computer's, from the first and the last ping that came
-    straight back (the unit answers late while a check keeps it busy)."""
+    straight back (the unit answers late while a check keeps it busy). `answers`: when each ping
+    was sent, when its answer came, and the unit's microsecond count in it."""
     quick = []
-    for number, _ms, us, at in pongs:
-        if at is not None and number in sent and at - sent[number] < 0.03:
-            quick.append(((at + sent[number]) / 2, us))
+    for asked, at, us in answers:
+        if 0 <= at - asked < 0.03:
+            quick.append(((at + asked) / 2, us))
     if len(quick) < 2 or quick[-1][0] - quick[0][0] < 5:
         return None
     host = quick[-1][0] - quick[0][0]
@@ -309,6 +310,9 @@ def receive(wanted: str, out: Path | None, wait: float) -> int:
         time.sleep(0.5)
     back = find_port(mido.get_output_names(), wanted)
     report, sent, number, next_ping = Report(), {}, 0, 0.0
+    answers: list[
+        tuple[float, float, int]
+    ] = []  # ping numbers come round again, so each answer is paired as it arrives
     print(f"listening on {name}" + ("" if back else "; no output port of that name, so no pings") + " (Ctrl-C to end)")
     with mido.open_input(name) as source:
         sink = mido.open_output(back) if back else None
@@ -318,8 +322,12 @@ def receive(wanted: str, out: Path | None, wait: float) -> int:
             while report.end is None:
                 for message in source.iter_pending():
                     if message.type == "sysex":
+                        seen = len(report.pongs)
                         for line in report.feed(bytes(message.data), time.monotonic()):
                             print(line, flush=True)
+                        for pong, _ms, us, at in report.pongs[seen:]:
+                            if pong in sent:
+                                answers.append((sent.pop(pong), at, us))
                 if sink and time.monotonic() >= next_ping:
                     number = number % 127 + 1
                     sent[number] = time.monotonic()
@@ -331,7 +339,7 @@ def receive(wanted: str, out: Path | None, wait: float) -> int:
         finally:
             if sink:
                 sink.close()
-    return finish(report, out, clock_check(report.pongs, sent))
+    return finish(report, out, clock_check(answers))
 
 
 def main(argv: list[str] | None = None) -> int:

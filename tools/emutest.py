@@ -237,7 +237,7 @@ def check_sdk_cv() -> str:
     assert out["gate_pin"] == 1 and out["pitch"] == pitch(60), out
     board.release("k7")
     board.set_touch(0, 1.0)
-    board.adc[:] = [1234, 3210]
+    board.adc[:] = [3210, 1234]
     board.run(60)
     out = board.outputs()
     assert (out["gate_pin"], out["mod1"], out["mod2"]) == (0, 4095, 3210), out
@@ -849,8 +849,9 @@ def check_mk_step_fields() -> str:
     tap(board, "k7")
     tap(board, "back")
     tap(board, "back")
-    late = [(t, n) for t, _c, n, v in play_from_top(board, 2450) if v and n == 60]
-    assert len(late) == 1 and near(late[0][0], 18 * 125, 8), f"step 19 of 20 plays at 2250 ms: {late}"
+    notes = [(t, n) for t, _c, n, v in play_from_top(board, 2450) if v]
+    late = [(t - notes[0][0], n) for t, n in notes if n == 60]  # from step 1: Play itself takes some milliseconds
+    assert len(late) == 1 and near(late[0][0], 18 * 125, 3), f"step 19 of 20 plays 2250 ms after step 1: {late}"
     return "a step's velocity, tie and condition, and a step on the second page of a 20-step track"
 
 
@@ -983,13 +984,13 @@ def check_mk_controls() -> str:
     assert board.outputs()["mod2"] == 1545, f"and Mod 2, on stock's scale: {board.outputs()}"
     board.set_touch(0, None)
     assert sent(board) == b"", "the mod strip stays where it was left"
-    board.adc[0] = 4095
+    board.adc[1] = 4095
     assert sent(board) == bytes([0xB0, 64, 127]), "pedal down: sustain"
-    board.adc[0] = 0
-    assert sent(board) == bytes([0xB0, 64, 0]), "pedal up"
-    board.adc[1] = 3000
-    assert sent(board, 100) == b"", "pressure with no key down sends nothing"
     board.adc[1] = 0
+    assert sent(board) == bytes([0xB0, 64, 0]), "pedal up"
+    board.adc[0] = 3000
+    assert sent(board, 100) == b"", "pressure with no key down sends nothing"
+    board.adc[0] = 0
     board.run(200)
     board.press("k7")
     data = sent(board)
@@ -999,11 +1000,11 @@ def check_mk_controls() -> str:
         out,
     )
     assert out["mod1"] == data[2] * 1545 // 127, f"the keys on track 1's channel play on CV, velocity on Mod 1: {out}"
-    board.adc[1] = 1200
+    board.adc[0] = 1200
     assert sent(board) == bytes([0xD0, 63]), "half pressure"
-    board.adc[1] = 4095
+    board.adc[0] = 4095
     assert sent(board) == bytes([0xD0, 127]), "full pressure"
-    board.adc[1] = 0
+    board.adc[0] = 0
     assert sent(board) == bytes([0xD0, 0])
     board.release("k7")
     board.run(60)
@@ -1082,7 +1083,7 @@ def check_mk_controls() -> str:
     tap(board, "stop")
     assert cc1(520) == [(1, 127), (3, 63)], "Rec Autom Off: the strip plays but is not recorded"
     board.press("k7")
-    board.adc[1] = 4095
+    board.adc[0] = 4095
     assert 0xD0 not in sent(board), "Aft Sensitivity Off"
     return "strips, pedal, aftertouch, CV from the keys, controller recording, Clear Autom, Rec Autom"
 
