@@ -41,15 +41,12 @@ warnings.
 |---|---|
 | `examples/hello` | Shows every control, plays the keys as MIDI notes. The template for `make new`. |
 | `examples/mk2000` | **KeyStep MK2000**, the full firmware: four tracks with ratchets, probability and conditions per step, channels changed with a held button and a numbered key, an arpeggiator, scales and chords, pattern chains, saved to flash. Design in [MK2000.md](../docs/MK2000.md); its engine, store, arpeggiator, clock and harmony have host tests in `examples/mk2000/tests`. |
-| `examples/screens` | The MK2000 screens as still pictures in the stock fonts; turn the encoder. |
-| `examples/seq4` | The first sketch of a four-track step sequencer: 16 steps, four notes per step, step and live recording, saved with Shift + Seq. Everything is on the display; the lights above the keys repeat it on the 37-key model. |
 | `examples/flashdump` | Sends the whole external flash out as SysEx (USB if connected, else DIN) for `tools/flashdump.py`: the backup of a unit's patterns, settings and calibration. Reads only. |
 | `examples/bootdump` | `flashdump` reading the processor's first 32 KiB instead: the bootloader, which is in no package. Reads only. |
 | `examples/cv` | The keyboard as a CV source: pitch and gate from the keys, Mod 1 from the strip, Mod 2 from aftertouch, a clock on the sync output, and the inputs on the display. |
 | `examples/fonts` | Text in the stock firmware's two fonts (see Fonts below). |
 | `examples/flashtest` | Checks the external flash driver: chip id, the write guard, and a write and read-back in the last sector of the SDK's area. |
 
-![seq4 playing in the panel](../docs/panel-seq4.png)
 
 ## API (`include/keystep.h`)
 

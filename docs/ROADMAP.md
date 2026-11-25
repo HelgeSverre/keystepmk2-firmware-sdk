@@ -66,7 +66,7 @@ Flashing is safe once two things are known:
 9. **Demonstration: multi-track MIDI sequencer.** `sdk/examples/mk2000`, KeyStep MK2000
    ([MK2000.md](MK2000.md)): four tracks, per-step ratchet, probability and conditions, channel
    changes on the numbered keys, arpeggiator, chains, power-cut-safe storage. Runs in the emulator
-   only. The earlier sketch is `sdk/examples/seq4`. Missing: external clock, thru and merge,
+   only. Missing: external clock, thru and merge,
    controller recording, Mutate and Spice, scales and chords.
 
 ## Rules

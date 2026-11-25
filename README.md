@@ -16,6 +16,8 @@ Unofficial. Not affiliated with or endorsed by Arturia.
 | `docs/SYSEX.md` | The SysEx dispatcher: all 14 operations and the parameter id layout |
 | `docs/VERSIONS.md` | What differs between the published versions |
 | `docs/HARDWARE.md` | Clock, pin table, buses, display, LEDs, keybed, CV, external flash |
+| `docs/user-guide.html`, `docs/USER-GUIDE.md` | The MK2000 user guide: a designed, standalone page, and the same facts as plain text |
+| `docs/MK2000.md` | The MK2000 design: what the code is built to |
 | `docs/FLASHING.md` | How to flash a unit, check it and get back to stock; what never to send |
 | `docs/BOOTLOADER.md` | Update mode and the bootloader: what a unit did, and the bootloader's code read |
 | `docs/UPDATER.md` | How MIDI Control Center installs firmware (USB DFU with Arturia requests) |
@@ -39,8 +41,7 @@ just selftest         # rebuild every stock header and compare
 just host stock       # the stock firmware in a window you can click
 just host hello       # build an app and open it in the same window
 just host mk2000      # KeyStep MK2000: the four-track firmware (docs/MK2000.md)
-just host seq4        # the first four-track sequencer demo
-just shot seq4        # a picture of it after 3 s, as seq4.png
+just shot mk2000      # a picture of it after 3 s, as mk2000.png
 just flash-sim hello  # rehearse flashing it: emulated device, model of the bootloader
 just test             # run the stock firmware and the SDK examples through the emulator checks
 just probe            # read a connected KeyStep's USB descriptors (sends nothing else)

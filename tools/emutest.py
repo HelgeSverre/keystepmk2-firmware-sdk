@@ -245,70 +245,6 @@ def check_sdk_cv() -> str:
     return "pitch, gate, both mod outputs, gate format and the analog inputs"
 
 
-def check_sdk_seq4() -> str:
-    board = sdk("seq4")
-    tap(board, "play", 40, 0)
-    interval = clock_interval(board, 700)
-    assert near(interval, 20.83, 0.1), interval
-    data = bytes(b for b in board.midi_out if b != 0xF8)
-    assert data[0] == 0xFA and {0x90, 0x91, 0x92} <= set(data), data.hex(" ")
-    assert board.outputs()["sync_run"] == 1
-    # track 1 shortened to three steps comes round again after three
-    board.press("shift")
-    board.run(40)
-    tap(board, "k6", 40)
-    board.release("shift")
-    tap(board, "stop")
-    board.midi_out.clear()
-    tap(board, "play", 40, 0)
-    board.run(1000)
-    first = [i for i, b in enumerate(board.midi_out) if b == 0x90]
-    notes = [board.midi_out[i + 1] for i in first]
-    assert notes[:3] == [41, 41, 41], notes  # steps 1, 4 (41) of 16 became 1, 1, 1 of 3
-    tap(board, "stop")
-    assert board.outputs()["gate_pin"] == 0 and board.outputs()["sync_run"] == 0
-    return f"clock every {interval:.2f} ms, three channels, a three-step track repeats, CV idle after stop"
-
-
-def check_sdk_seq4_live() -> str:
-    board = sdk("seq4")
-    board.press("seq")
-    board.run(40)
-    tap(board, "k3", 40)  # track 4, empty in the demo
-    board.release("seq")
-    tap(board, "record")
-    tap(board, "play", 40, 0)
-    board.run(260)  # into step 3 (steps are 125 ms)
-    tap(board, "k20", 60)
-    board.run(2000 - 60 - 40 - 300)  # the rest of the 16 steps
-    board.midi_out.clear()
-    times = []
-    for _ in range(2000):
-        board.run(1)
-        if bytes([0x93, 73]) in bytes(board.midi_out):
-            times.append(board.us / 1000)
-            board.midi_out.clear()
-    assert len(times) == 1, f"the recorded note played {len(times)} times in one pass"
-    return "a key played while recording and running comes back on the next pass of track 4"
-
-
-def check_sdk_store() -> str:
-    board = sdk("seq4")
-    board.press("shift")
-    board.run(40)
-    tap(board, "k8", 40)  # track 1: five steps
-    tap(board, "seq", 80, 800)  # save
-    board.release("shift")
-    again = sdk("seq4", flash=bytes(board.flash.mem))
-    tap(again, "play", 40, 0)
-    again.run(1400)
-    notes = [again.midi_out[i + 1] for i, b in enumerate(again.midi_out) if b == 0x90]
-    assert notes[:4] == [41, 41, 41, 41], notes  # steps 1 and 4, then 1 and 4 again after five steps
-    changed = {i for i in range(0x80) if board.flash.mem[i << 12 : (i + 1) << 12] != b"\xff" * 0x1000}
-    assert changed == {0x41}, changed
-    return "seq4 saves to the first sector of the SDK area only and loads it on the next boot"
-
-
 def check_sdk_flash() -> str:
     board = sdk("flashtest", 1500)
     text = board.oled.render()
@@ -499,7 +435,9 @@ def check_mk_step_page() -> str:
     tap(board, "encoder")  # into step 1
     step_field(board, 3, 2)  # Ratchet 1 -> 3
     tap(board, "back")
-    tap(board, "k5")  # the numbered key 2: step 2
+    hold(board, "seq")
+    tap(board, "k5")  # Seq + the numbered key 2: step 2
+    let_go(board, "seq")
     assert "T1 Step 2" in small_text(board), small_text(board)
     tap(board, "encoder")
     board.midi_out.clear()
@@ -891,8 +829,8 @@ def check_mk_step_fields() -> str:
     assert near(length, 62.5, 4) and near(tied, 125, 4), f"a tied step lasts until the next: {length} then {tied}"
     hold(board, "seq")
     turn(board, 1)
+    tap(board, "k4")  # Seq + the numbered key 1: step 1
     let_go(board, "seq")
-    tap(board, "k4")
     tap(board, "encoder")
     step_field(board, 5, -1)
     step_field(board, 4, 1)  # Condition: 1 of 2
@@ -905,8 +843,8 @@ def check_mk_step_fields() -> str:
     let_go(board, "tempo", "shift")
     hold(board, "seq")
     turn(board, 1)
+    turn(board, 1)  # Seq + turn with the page open: the second page of 16
     let_go(board, "seq")
-    tap(board, "k1")  # the second page of 16
     assert "T1 Step 17" in small_text(board), small_text(board)
     turn(board, 2)
     tap(board, "encoder")
@@ -1381,6 +1319,53 @@ def check_mk_shared_notes() -> str:
     shift_key(board, "k31")  # Undo
     assert played(board, 760)[:3] == [60, 62, 64], "Undo brings the step back"
     return "a note held by a key and a track ends with its last holder; Hold clears a step on the step page"
+
+
+def check_mk_step_list() -> str:
+    board = mk2000()
+    mk_record_steps(board, ("k7", "k9", "k11"))  # C4 D4 E4: three steps
+    hold(board, "seq")
+    turn(board, 1)
+    let_go(board, "seq")
+    board.run(400)  # past the tap time: letting go of Seq must not switch the tracks off
+    board.midi_out.clear()
+    tap(board, "k14")  # a key in the list: its note goes on the step, and sounds
+    assert notes(board) == [(0, 67)] and shows(board, "G4"), f"the key replaces step 1's note: {all_text(board)}"
+    assert "T1 Step 1" in small_text(board), "and the page stays on the step"
+    board.press("k7")  # two keys held together: a chord
+    board.run(40)
+    board.press("k11")
+    board.run(40)
+    board.release("k7")
+    board.release("k11")
+    board.run(60)
+    assert shows(board, "C4 E4"), all_text(board)
+    turn(board, 6)  # on past the end of the three-step track
+    assert "T1 Step 7" in small_text(board) and "past end" in small_text(board), small_text(board)
+    tap(board, "k19")
+    assert shows(board, "C5"), all_text(board)
+    hold(board, "seq")
+    tap(board, "k6")  # Seq + numbered key 3
+    assert "T1 Step 3" in small_text(board), small_text(board)
+    turn(board, 1)  # Seq + turn: a page of 16 on
+    assert "T1 Step 19" in small_text(board) and "past end" in small_text(board), small_text(board)
+    tap(board, "k1")  # Seq + bank key 2: track 2, as everywhere
+    assert "T2 Step 19" in small_text(board), small_text(board)
+    tap(board, "k0")
+    let_go(board, "seq")
+    tap(board, "back")
+    first = [n for _t, _c, n, v in play_from_top(board, 800) if v]
+    assert first[:8] == [60, 64, 62, 64, 60, 64, 62, 64], f"three steps still: the note on step 7 is silent: {first}"
+    hold(board, "shift", "tempo")
+    turn(board, 4)
+    assert shows(board, "7 steps"), all_text(board)
+    let_go(board, "tempo", "shift")
+    longer = [n for _t, _c, n, v in play_from_top(board, 1000) if v]
+    assert longer[:5] == [60, 64, 62, 64, 72], f"with the length at 7 the waiting note plays: {longer}"
+    tap(board, "seq")  # a tap still switches the tracks off
+    assert played(board, 400) == [], "Seq tapped: tracks off"
+    tap(board, "seq")
+    return "keys enter notes in the step list, Seq + key goes to a step, steps past the length are edited and wait"
 
 
 def check_mk_scale() -> str:
@@ -1861,8 +1846,8 @@ def check_mk_rec_quantize() -> str:
     assert len(snapped) == 2 and all(near(t, 375, 3) for t in snapped), f"Rec Quantize On: on the step: {snapped}"
     hold(again, "seq")
     turn(again, 1)
+    tap(again, "k6")  # Seq + numbered key 3: step 3, A3
     let_go(again, "seq")
-    tap(again, "k6")  # step 3, A3
     tap(again, "encoder")
     turn(again, 6)  # Offset, after Tie
     tap(again, "encoder")
@@ -1920,9 +1905,6 @@ CHECKS = {
     "stock 37 keys": check_stock_37,
     "sdk usb": check_sdk_usb,
     "sdk cv": check_sdk_cv,
-    "sdk seq4": check_sdk_seq4,
-    "sdk seq4 live": check_sdk_seq4_live,
-    "sdk store": check_sdk_store,
     "sdk flash": check_sdk_flash,
     "mk2000 identity": check_mk_identity,
     "mk2000 channels": check_mk_channels,
@@ -1942,6 +1924,7 @@ CHECKS = {
     "mk2000 mutate": check_mk_mutate,
     "mk2000 cv": check_mk_cv,
     "mk2000 shared notes": check_mk_shared_notes,
+    "mk2000 step list": check_mk_step_list,
     "mk2000 scale": check_mk_scale,
     "mk2000 chord": check_mk_chord,
     "mk2000 arp settings": check_mk_arp_settings,

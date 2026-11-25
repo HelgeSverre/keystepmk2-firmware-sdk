@@ -153,9 +153,10 @@ static uint32_t chord;          /* inside a step: keys of the chord being entere
 
 static mk_track *track(void) { return &mk_engine_pattern()->track[app.track]; }
 
-/* The selected track may have changed or got shorter since the cursor was put there. */
+/* The step the page is on. It may lie past the track's length: those steps can be edited like the
+ * others and start to play when the length reaches them. */
 static mk_step *step(void) {
-    if (cursor >= track()->length) cursor = (uint8_t)(track()->length - 1);
+    if (cursor >= MK_STEPS) cursor = MK_STEPS - 1;
     return &track()->step[cursor];
 }
 
@@ -543,15 +544,12 @@ void pages_buttons(uint32_t buttons) { holding &= buttons; }
 
 int pages_holding(void) { return kind != PAGE_NONE && holding; }
 
-/* The list uses the numbered keys for the steps of the page of 16 and the bank keys for the page;
- * a key past the end of the track is ignored. */
-static void jump(int to) {
-    int length = track()->length;
-    if (to / 16 * 16 >= length) return;
-    cursor = (uint8_t)(to < length ? to : length - 1);
-}
+/* The step list with Seq held: the numbered keys go to a step of the page of 16, the encoder moves
+ * a page at a time, and the bank keys select the track as they do with Seq everywhere (ui.c).
+ * Without Seq every key puts its note on the step, as inside a step. */
+static void jump(int to) { cursor = (uint8_t)(to < 0 ? 0 : to >= MK_STEPS ? MK_STEPS - 1 : to); }
 
-int pages_key(int key, uint8_t note, uint8_t velocity, int shift) {
+int pages_key(int key, uint8_t note, uint8_t velocity, int shift, int seq) {
     int numbered = key >= FIRST_NUMBERED && key < FIRST_EDIT;
     app.redraw = 1;
     switch (kind) {
@@ -561,13 +559,11 @@ int pages_key(int key, uint8_t note, uint8_t velocity, int shift) {
         chain_add(key - FIRST_NUMBERED);
         return PAGE_KEY_USED;
     case PAGE_STEPS:
-        if (level == INSIDE) {
+        if (level == INSIDE || !seq) {
             enter_note(key, note, velocity);
             return PAGE_KEY_TRACK;
         }
-        if (key < MK_BANKS) jump(key * 16 + cursor % 16);
-        else if (numbered) jump(cursor / 16 * 16 + key - FIRST_NUMBERED);
-        else return PAGE_KEY_PLAYS;
+        if (numbered) jump(cursor / 16 * 16 + key - FIRST_NUMBERED);
         return PAGE_KEY_USED;
     default:
         return PAGE_KEY_PLAYS;
@@ -584,8 +580,7 @@ void pages_turn(int by) {
     if (kind == PAGE_CHAIN) {
         chain_switch(by > 0);
     } else if (!m) {
-        step();                                         /* brings the cursor inside the track */
-        cursor = (uint8_t)clamp(cursor + by, 0, track()->length - 1);
+        cursor = (uint8_t)clamp(cursor + by, 0, MK_STEPS - 1);  /* on past the track's length */
     } else if (!editing) {
         shown = (uint8_t)clamp(shown + by, 0, m->count - 1);
     } else {
@@ -654,12 +649,24 @@ static void step_list_screen(void) {
     char line[48];
     step_title(line);
     text(SMALL, 0, TOP, line);
-    right(SMALL, TOP, mk_step_used(step()) ? "Hold: rest" : "click: edit");
+    right(SMALL, TOP, cursor >= t->length ? "past end" : mk_step_used(step()) ? "Hold: rest" : "click: edit");
     notes_text(line, LARGE, KS_OLED_W);
     text(LARGE, 0, MID, line);
-    int page = cursor / 16, used = 0;
-    for (int i = 0; i < 16 && page * 16 + i < t->length; i++) used |= mk_step_used(&t->step[page * 16 + i]) << i;
-    cells(used, cursor % 16);
+    /* The page of 16: the track's steps as cells, the ones past its length as dots (a small block
+     * when they hold a note: the display has one brightness), a bar after the last step that plays. */
+    int page = cursor / 16;
+    for (int i = 0; i < 16; i++) {
+        int at = page * 16 + i, x = i * 8, used = mk_step_used(&t->step[at]);
+        if (at >= t->length) {
+            if (used) ks_oled_rect(x + 2, 25, 4, 3, 1);
+            else ks_oled_rect(x + 3, 26, 2, 2, 1);
+        } else {
+            ks_oled_rect(x + 1, 24, 6, 5, 1);
+            if (!used) ks_oled_rect(x + 2, 25, 4, 3, 0);
+            if (at == t->length - 1 && i < 15) ks_oled_rect(x + 8, 23, 1, 7, 1);
+        }
+        if (at == cursor) ks_oled_rect(x + 1, 30, 6, 1, 1);
+    }
 }
 
 /* Below the field: the values of the other half of the fields, so most of the step is in view.

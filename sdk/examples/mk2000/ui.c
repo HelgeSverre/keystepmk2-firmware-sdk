@@ -354,7 +354,15 @@ static void key_down(int key, uint8_t velocity, uint32_t buttons, uint32_t now) 
     if (note < 0 || note > 127) return;
     int root, scale = app_scale(&root);
     note = mk_scale_fit(note, scale, root);
-    int use = pages_key(key, (uint8_t)note, velocity, (buttons & KS_BTN_SHIFT) != 0);
+    if (buttons & KS_BTN_SEQ) {                         /* Seq + key on the step page: not a tap of Seq */
+        combo_used = 1;
+        if (key < MK_TRACKS) {                          /* Seq + bank key selects the track here too */
+            app.track = (uint8_t)key;
+            if (app.recording) record_stop();
+            return;
+        }
+    }
+    int use = pages_key(key, (uint8_t)note, velocity, (buttons & KS_BTN_SHIFT) != 0, (buttons & KS_BTN_SEQ) != 0);
     if (use == PAGE_KEY_USED) return;
     if (use == PAGE_KEY_PLAYS && app.transpose_hold && !app.recording) {
         mk_engine_transpose(app.track, note - transpose_root());
@@ -459,7 +467,7 @@ static void turned(int by, uint32_t buttons) {
         tempo_tapped = 0;                               /* that press was to turn, not a tap */
         set_tempo(mk_engine_pattern()->tempo + 10 * by);
     } else if (app.layer == LAYER_HOME && pages_active()) {
-        pages_turn(by);
+        pages_turn(buttons & KS_BTN_SEQ && pages_active() == PAGE_STEPS ? 16 * by : by);   /* Seq: a page of 16 */
     } else if (app.recording == REC_STEP && rec_started && !rec_replacing) {
         app.rec_cursor = (uint8_t)((app.rec_cursor + by + 4 * t->length) % t->length);
     }
@@ -636,6 +644,7 @@ static uint8_t layer_for(uint32_t buttons) {
         if (buttons & KS_BTN_TEMPO) return LAYER_LENGTH;
         return LAYER_SHIFT;
     }
+    if (buttons & KS_BTN_SEQ && pages_active() == PAGE_STEPS) return LAYER_HOME;   /* Seq + key: go to a step */
     if (buttons & KS_BTN_SEQ) return LAYER_TRACKS;
     if (buttons & KS_BTN_ARP && arp_alone) return LAYER_ARP;
     if (buttons & KS_BTN_CHORD && chord_alone) return LAYER_CHORD;

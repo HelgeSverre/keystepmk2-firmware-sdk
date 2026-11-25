@@ -88,7 +88,7 @@ void pages_close(void);
 int pages_active(void);                         /* PAGE_ */
 void pages_buttons(uint32_t buttons);           /* every poll: notes which opening buttons were let go */
 int pages_holding(void);                        /* the buttons that opened the page are still down */
-int pages_key(int key, uint8_t note, uint8_t velocity, int shift);  /* PAGE_KEY_ */
+int pages_key(int key, uint8_t note, uint8_t velocity, int shift, int seq);     /* PAGE_KEY_; shift, seq: held */
 void pages_key_up(int key);
 int pages_hold(void);                           /* the Hold button; 1 if the page used it */
 int pages_clear(void);                          /* Shift + Clear; 1 if the page used it */
