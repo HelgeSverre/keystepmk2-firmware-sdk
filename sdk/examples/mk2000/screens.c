@@ -284,6 +284,11 @@ static void count_in_screen(void) {
 void screens_draw(void) {
     uint32_t buttons = ks_buttons();
     ks_oled_clear();
+    if (app.mutate_at) {                                /* Mutate still held: the helix, as stock */
+        helix_draw(app.mutate_at, ks_millis());
+        ks_oled_flush();
+        return;
+    }
     switch (app.layer) {
     case LAYER_CHANNEL: channel_screen(buttons); break;
     case LAYER_TRACKS: tracks_screen(); break;
@@ -310,6 +315,19 @@ static uint32_t scale(uint32_t rgb, uint32_t level) {  /* level 0-255 */
     return r << 16 | g << 8 | b;
 }
 
+/* A colour of the wheel at full strength: 0 red, 120 green, 240 blue. */
+static uint32_t hue(uint32_t degrees) {
+    uint32_t sector = degrees / 60 % 6, up = degrees % 60 * 255 / 60, down = 255 - up;
+    switch (sector) {
+    case 0: return 0xFF0000 | up << 8;
+    case 1: return down << 16 | 0x00FF00;
+    case 2: return 0x00FF00 | up;
+    case 3: return down << 8 | 0x0000FF;
+    case 4: return up << 16 | 0x0000FF;
+    default: return 0xFF0000 | down;
+    }
+}
+
 void lights_update(uint32_t buttons) {
     static const uint32_t track_colour[MK_TRACKS] = { 0xFF5000, 0x00A0C0, 0xC020A0, 0x30C010 };
     static uint32_t shown[KS_LED_COUNT];
@@ -319,7 +337,7 @@ void lights_update(uint32_t buttons) {
 
     want[KS_LED_SEQ] = scale(track_colour[app.track], app.settings.seq_on ? bright : dim);
     want[KS_LED_ARP] = app.settings.arp_on ? scale(white, bright) : 0;
-    want[KS_LED_MUTATE] = app_mutated() ? scale(white, bright) : 0;
+    want[KS_LED_MUTATE] = app.mutate_at ? scale(hue((ks_millis() - app.mutate_at) * 38 / 1000), bright) : app_mutated() ? scale(white, bright) : 0;
     want[KS_LED_CHORD] = app.settings.chord.on ? scale(white, bright) : 0;
     want[KS_LED_PLAY] = playing && beat ? scale(0x00FF20, bright) : playing ? scale(0x00FF20, dim) : 0;
     want[KS_LED_STOP] = playing ? 0 : scale(white, dim);

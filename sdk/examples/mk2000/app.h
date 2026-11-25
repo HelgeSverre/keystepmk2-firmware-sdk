@@ -33,6 +33,7 @@ typedef struct {
     uint8_t redraw;
     const char *message;        /* shown in the big line until message_until */
     uint32_t message_until;
+    uint32_t mutate_at;         /* when Mutate went down for the variation playing now, while it is still held; else 0 */
     mk_chain chain;             /* the chain of bank chain_bank, the bank in use */
     uint8_t chain_bank;
     uint8_t chain_dirty;        /* changed since it was last saved */
@@ -107,6 +108,7 @@ int pages_draw(void);                           /* 1 if a page was drawn */
 
 /* screens.c */
 void screens_draw(void);
+void helix_draw(uint32_t pressed_at, uint32_t now);     /* helix.c: the picture while Mutate is held */
 void lights_update(uint32_t buttons);
 
 /* screens.c: the pieces the screens are drawn from, shared with pages.c. Rows: small font at 0,

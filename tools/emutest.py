@@ -1111,6 +1111,18 @@ def check_mk_mutate() -> str:
     shift_key(board, "mutate")
     assert shows(board, "Mutate Reset"), all_text(board)
     assert played(board, 1040)[:8] == original, "Shift + Mutate: the track as it was"
+    board.run(1300)
+    hold(board, "mutate")  # held: the helix, turning, and the light going round the colours
+    board.run(300)
+    first, light = board.oled.render(), board.leds[1][6]
+    assert all_text(board).strip() == "" and first.count("█") > 60, (
+        f"a drawing and no text while Mutate is held:\n{first}"
+    )
+    board.run(300)
+    assert board.oled.render() != first and board.leds[1][6] != light, "it moves, and so does the colour"
+    assert "▄" * 20 in board.oled.render().splitlines()[-1], "the line along the bottom has grown"
+    let_go(board, "mutate")
+    assert shows(board, "Track Mutated"), all_text(board)
     tap(board, "play", 40, 0)  # while it plays
     board.run(300)
     tap(board, "mutate")
@@ -1124,7 +1136,7 @@ def check_mk_mutate() -> str:
     assert not shows(board, "Mutate Reset") and played(board, 1040)[:8] == variation, (
         "saved: the variation is the pattern"
     )
-    return "new variations of the original on every press, reset, while playing, kept by a save"
+    return "new variations of the original on every press, the helix while held, reset, while playing, kept by a save"
 
 
 def check_mk_cv() -> str:

@@ -619,7 +619,8 @@ void app_mutate(void) {
     app_unlock(state);
     mk_engine_edited(app.track);
     app.dirty = 1;
-    app_message("Track Mutated");
+    app.message = 0;
+    app.mutate_at = ks_millis() | 1;                    /* the helix while it is held, then the message */
 }
 
 void app_mutate_reset(void) {
@@ -715,7 +716,11 @@ int main(void) {
         }
         if (app.slot / 16 != app.chain_bank) chain_load(app.slot / 16);
         if (app.chain_dirty && !mk_engine_playing() && pages_active() != PAGE_CHAIN) app_chain_save();
-        if (app.redraw || ((mk_engine_playing() || app_counting()) && now - last_draw >= 40)) {
+        if (app.mutate_at && !(ks_buttons() & KS_BTN_MUTATE)) {
+            app.mutate_at = 0;
+            app_message("Track Mutated");
+        }
+        if (app.redraw || ((mk_engine_playing() || app_counting() || app.mutate_at) && now - last_draw >= 40)) {
             app.redraw = 0;
             last_draw = now;
             lights_update(ks_buttons());
