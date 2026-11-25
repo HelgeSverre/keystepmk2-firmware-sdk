@@ -276,7 +276,7 @@ static void check_strip(int id, int strip, const char *what) {
 }
 
 /* ---- aftertouch: the level moves away from its rest level while a key is pressed hard.
- * Which way and how far is not known for a real unit, so both are reported. ---- */
+ * Which way and how far is reported: on the one unit tried, up from about 2 to about 3300. ---- */
 
 static void check_aftertouch(void) {
     int32_t rest = rest_aftertouch, low = 4096, high = -1, threshold = 4 * rest_aftertouch_spread;

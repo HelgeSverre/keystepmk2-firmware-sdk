@@ -193,7 +193,7 @@ static void check_sync(void) {
            PULSES, counted, heard, followed, run, idle);
 }
 
-/* ---- analog inputs with nothing pressed: the levels of a real unit are what we want to know,
+/* ---- analog inputs with nothing pressed: the levels differ from unit to unit and pedal to pedal,
  * so this measures, and fails only a value the converter cannot give or a converter that has
  * stopped (the driver counts its conversions: each input gets one about every 4 ms) ---- */
 

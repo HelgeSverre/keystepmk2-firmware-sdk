@@ -1,8 +1,8 @@
 /* KeyStep mk2 SDK: the board, as far as it is mapped (docs/HARDWARE.md).
  *
- * Written against tools/emu.py. Firmware built on it has run on a unit (docs/FLASHING.md); which
- * drivers have been shown to work there is in sdk/README.md, and sdk/examples/selftest checks the
- * rest. */
+ * Written against tools/emu.py and checked on one 32-key unit with sdk/examples/selftest. What
+ * that showed to work, and what has not been tried there (MIDI DIN, CV, gate, sync), is in
+ * sdk/README.md. */
 #ifndef KEYSTEP_H
 #define KEYSTEP_H
 #include <stdint.h>
@@ -82,8 +82,9 @@ void ks_led(int led, uint32_t rgb);
 void ks_leds_show(void);                /* sends both chains; takes about 3 ms */
 
 /* ---- CV, gate and sync. The values are what the processor puts out: the circuits between the
- * pins and the sockets are not mapped, so volts per count, the gate levels and the calibration
- * the stock firmware applies (kept in the unit's flash) are all unknown here. ---- */
+ * pins and the sockets are not mapped, so volts per count and the gate levels are unknown, and
+ * none of these has been tried on a unit. The calibration the stock firmware applies is kept in
+ * the unit's flash (docs/HARDWARE.md); examples/mk2000/calib.c reads it. ---- */
 void ks_cv_pitch(uint16_t value);       /* 0 to 65535 */
 void ks_cv_mod(int output, uint16_t value);     /* output 0 or 1 (Mod 1, Mod 2), 0 to 4095 */
 void ks_gate(int on);
@@ -98,8 +99,8 @@ int ks_sync_pulses(void);               /* pulses that arrived on the clock inpu
 void ks_sync_clock_in(void);
 
 /* ---- analog inputs, 0 to 4095, refreshed every 4 ms ---- */
-int ks_aftertouch(void);                /* pressure on the keybed's strip */
-int ks_pedal(void);                     /* the pedal socket */
+int ks_aftertouch(void);                /* pressure on the keybed's strip: near 0 at rest, about 3300 pressed hard */
+int ks_pedal(void);                     /* the pedal socket: near 4095 with nothing plugged in, near 0 shorted */
 uint32_t ks_analog_count(void);         /* conversions finished since start: it stands still if the converter does */
 
 /* ---- MIDI on the DIN sockets ---- */

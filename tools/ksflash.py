@@ -12,12 +12,13 @@
 What is and is not known:
 - The sequence (0xF2 enter, 0xF4 select image, DFU download blocks with status polls, a
   zero-length block, 0xF3 leave) is read from MIDI Control Center's code. The bootloader that
-  answers it has not been read.
-- `sim` and `selftest` run against FakeBootloader below, which is that reading turned into
-  code. They test this tool's logic and refusals, not the real bootloader.
-- `flash --real` has flashed stock 1.0.2 to one unit, from an update mode entered with Tempo,
-  and the read-back was identical (docs/BOOTLOADER.md, 2026-11-24). Nothing but a stock image has
-  been sent to a unit with it.
+  answers it has been read out and disassembled since (docs/BOOTLOADER.md, "The bootloader, read").
+- `sim` and `selftest` run against FakeBootloader below, which is the reading of MIDI Control
+  Center turned into code. They test this tool's logic and refusals, not the real bootloader.
+- `flash --real` has flashed one unit many times, each read back identical before the restart:
+  stock 1.0.2 from an update mode entered with Tempo (docs/BOOTLOADER.md, 2026-11-24), then a
+  stock image with one byte changed and the SDK's own firmware, mostly from a running
+  application through 0xF2 (docs/FLASHING.md).
 
 The tool refuses: an image that fails tools/fwpack.py's checks, a device that is not
 1C75:0228/0229 with a firmware-update interface, and a device in update mode whose identity
@@ -222,10 +223,13 @@ def flash(
 class FakeBootloader:
     """A guess at the factory bootloader, built from what MIDI Control Center expects of it.
 
-    Assumptions, none of them checked on a unit: same USB ids and serial as the application, one
-    interface (FE/01), 64-byte blocks, the application area is erased when the first block
-    arrives, the image is judged at the end by the header rules in tools/fwpack.py, and request
-    0xF3 starts the application if there is a valid one."""
+    It was written before the bootloader was read, and it differs from the real one
+    (docs/BOOTLOADER.md, "The bootloader, read") where that does not matter to this tool: same
+    USB ids and serial as the application (the real one's serial is noise after a Tempo entry),
+    one interface (FE/01), 64-byte blocks (as the real one), the application area erased when the
+    first block arrives (as the real one, after a good header), the image judged at the end by
+    the header rules in tools/fwpack.py (the real one checks the header first and the body sum at
+    0xF3), and request 0xF3 starts the application if there is a valid one."""
 
     BLOCK = 64
 

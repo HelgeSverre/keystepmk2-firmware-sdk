@@ -3,13 +3,15 @@
 Goal: flash our own firmware safely, with an SDK, a toolchain and an emulator, and a multi-track
 MIDI sequencer as the demonstration. The method follows `../reverse-engineering/jt4000`.
 
-Status as of 2026-11-24. Phases 3 and 4 are done on one unit: update mode entered with Tempo,
+Status as of 2026-11-25. Phases 3 and 4 are done on one unit: update mode entered with Tempo,
 the flash read back through DFU upload, and stock 1.0.2 flashed from update mode first through
 MIDI Control Center and then with `tools/ksflash.py`, each verified by reading the flash back
 ([BOOTLOADER.md](BOOTLOADER.md), "Seen on a device"). Phase 5, on 2026-11-25: a stock image with one
 byte changed ran, so there is no signature. The same day `flashdump` copied the unit's
-external flash, `bootdump` read the bootloader (phase 6), and MK2000 was flashed and started.
-Next: go through MK2000 on the unit, driver by driver.
+external flash, `bootdump` read the bootloader (phase 6), MK2000 was flashed and played, and the
+self-test ran on the unit: display, lights, buttons, encoder, keys, strips, aftertouch, pedal,
+USB and flash reads pass ([SELFTEST.md](SELFTEST.md)). Next: the outputs nobody has tried on the
+unit (MIDI DIN, CV, gate, sync), and going through the newest MK2000 build there.
 
 ## The gating question
 
@@ -22,7 +24,7 @@ Flashing is safe once two things are known:
 | Question | Answer so far | Evidence |
 |----------|---------------|----------|
 | Recovery entry | Hold Tempo while switching on | Done on a unit, three times; MIDI Control Center flashes a unit entered this way |
-| Entry from the application | USB class request `0xF2`, then a RAM marker and a reset | Application code ([BOOTLOADER.md](BOOTLOADER.md)) |
+| Entry from the application | USB class request `0xF2`, then a RAM marker and a reset | Application and bootloader code ([BOOTLOADER.md](BOOTLOADER.md)); used on a unit for every flash |
 | Image integrity | Two XOR sums in a 64-byte header, no encryption | All four stock images; `tools/fwpack.py selftest` rebuilds each header byte for byte |
 | Signature | None | A stock image with one byte changed and the sums rebuilt was flashed and ran (2026-11-25) |
 | Update protocol | USB DFU blocks plus Arturia requests `0xF2` (enter), `0xF4` (select image), `0xF3` (leave) | MCC's code ([UPDATER.md](UPDATER.md)); `tools/ksflash.py` sends that sequence and a unit took it |
@@ -58,16 +60,17 @@ Flashing is safe once two things are known:
    uses). USB MIDI with the stock identity and the update request (so a
    flashed SDK firmware can be replaced without the Tempo button), the SysEx version reply, CV,
    gate, sync, aftertouch and pedal as raw values, and optional use of the stock fonts
-   (`tools/fontextract.py`). Missing: calibrated CV, the 37-key model.
+   (`tools/fontextract.py`). Missing: the 37-key model. Checked on a unit with
+   `sdk/examples/selftest`, all but MIDI DIN, CV, gate and sync ([SELFTEST.md](SELFTEST.md)).
    Tools around it: `tools/ksflash.py` (flash, read back, verify; used on a unit, see
    [FLASHING.md](FLASHING.md)), `sdk/examples/flashdump` with `tools/flashdump.py` (a read-only
    copy of the external flash over MIDI) and `sdk/examples/bootdump` (the same for the
    bootloader). All three have run on a unit.
 9. **Demonstration: multi-track MIDI sequencer.** `sdk/examples/mk2000`, KeyStep MK2000
    ([MK2000.md](MK2000.md)): four tracks, per-step ratchet, probability and conditions, channel
-   changes on the numbered keys, arpeggiator, chains, power-cut-safe storage. Runs in the emulator
-   only. Missing: external clock, thru and merge,
-   controller recording, Mutate and Spice, scales and chords.
+   changes on the numbered keys, arpeggiator, chains, power-cut-safe storage, external clock,
+   thru, controller recording, Mutate and Spice, scales and chords, CV. Flashed to a unit and
+   played there; what has and has not been tried on it is at the top of MK2000.md.
 
 ## Rules
 

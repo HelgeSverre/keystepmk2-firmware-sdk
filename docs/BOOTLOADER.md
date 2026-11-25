@@ -10,12 +10,12 @@ differs from an earlier section, the later one is right.
 
 | Way in | Source | Status |
 |--------|--------|--------|
-| Hold **Tempo** while switching the unit on | Arturia support article "MIDI Control Center (MCC) - Firmware Update", row "KeyStep mk2 / KeyStep 37 mk2". The article adds: "once in bootloader mode, all LEDs and the screen should be OFF" | Documented by Arturia; not tried here |
-| USB class request `0xF2` to the running application | Application code, below | Read from code; not tried here |
+| Hold **Tempo** while switching the unit on | Arturia support article "MIDI Control Center (MCC) - Firmware Update", row "KeyStep mk2 / KeyStep 37 mk2". The article adds: "once in bootloader mode, all LEDs and the screen should be OFF" | Documented by Arturia; done on a unit (see "Seen on a device") |
+| USB class request `0xF2` to the running application | Application code, below | Read from code; used on a unit for every flash with `tools/ksflash.py`, from stock and from SDK firmware |
 
 The Tempo entry is Arturia's recovery path after a failed update, so it must work without a
-running application. That is the property that makes flashing recoverable. It should be confirmed
-on the device (hold Tempo, check which USB device appears) before anything is flashed.
+running application. That is the property that makes flashing recoverable. It was confirmed
+on a unit before anything was flashed, and the bootloader's code shows why (both below).
 
 ## What the application does: request `0xF2`
 
@@ -136,7 +136,8 @@ holding Tempo while switching on.
 - The serial string is noise after a Tempo entry. That fits the reading above: the application
   hands its serial string to the bootloader in RAM when it is asked for update mode, and nothing
   does after a cold start. MIDI Control Center matches the update-mode device by serial, so it
-  may not recognise a unit entered this way; not tried.
+  might not have recognised a unit entered this way. It did: it flashed the unit from there
+  (2026-11-24).
 
 ### Upload: the bootloader reads flash back
 

@@ -84,7 +84,7 @@ written before the pins are switched to output.
 | PA10 | AF open drain | up | 6 | – | I2C1 SDA [0x08019f20] | V |
 | PA11, PA12 | not configured | | | | USB D−/D+ | I |
 | PA13, PA14 | not configured | | | | SWD (reset state) | I |
-| PA15 | input, EXTI15 rising | down | – | – | Debounced digital input, polled [0x08008e40]; purpose unknown | V |
+| PA15 | input, EXTI15 rising | down | – | – | Tempo button: debounced digital input, polled [0x08008e40]; the bootloader reads it at start (BOOTLOADER.md) | V |
 | PB0 | output, high speed | none | – | low | LED chain 0 select, low while that chain is sent [0x080143f4] | V |
 | PB1 | output | none | – | low | Gate format select A [0x080161b4] | V |
 | PB2 | output | none | – | low | Keybed select bit 3 [0x080130d0] | V |
@@ -465,7 +465,7 @@ Seen in the emulator after start-up (V in emulation, 2026-11-23):
 - With the host model in `tools/usbmodel.py` the firmware enumerates as `1C75:0228`,
   "Arturia" / "KeyStep mk2" / serial "0123456789ABCDEF", and answers the SysEx version request
   on its USB MIDI port with `1.0.2.782`, the same reply a real unit gave. The serial is the
-  image's default; whether a real unit reports another one is not known.
+  image's default, and the one unit looked at reports the same string.
 
 ## Memory and run-time [0x08021ec4, 0x08021e60, 0x08061aac]
 
@@ -507,8 +507,9 @@ a device. It supersedes the "not determined" notes above for the 32-key model.
 With all 16 bits high the firmware never draws its start-up screen, so released is 0.
 
 **Tempo** is not on the shift register. It is PA15: pulled down, high when pressed. That is the
-pin the pin table lists as "purpose unknown", and it fits Arturia's instruction to hold Tempo at
-power-on for update mode: the bootloader can read one pin without the SPI chain (inferred).
+pin Arturia's instruction to hold Tempo at power-on for update mode relies on: the bootloader
+reads PA15 before it starts the application (V in the bootloader's code and on a unit,
+BOOTLOADER.md).
 
 **Encoder:** one encoder on the 32-key model, phases on PC12/PC13, idle high. The firmware accepts
 a quarter step every 12 ms; 2 ms was too fast for its debounce. The PC14/PC15 pair had no effect.
@@ -541,22 +542,25 @@ on; "Tempo / Bank / Preset" in Seq mode; "Arp | Up" in Arp mode; the Global Sett
 
 ## Not determined
 
-- Exact MCU part number, package and flash size; option bytes; the bootloader.
+- Exact MCU part number, package and flash size; option bytes.
 - The OLED controller part (only its command set), and whether its chip select is tied low.
 - The LED part, and the order of the 54 LEDs on the panel.
 - The touch controller chip at I2C address 0x15, and the meaning of `64 28 05` and of the
   4-byte report.
-- Which shift register bit is which button; which encoder object is which knob; where the
-  encoder push switches are read.
-- The purpose of PA15 (input, pull-down, EXTI 15 rising, polled).
+- Which encoder object is which knob on the 37-key model. (The button bits above and the
+  encoder push were confirmed on a 32-key unit by the self-test, SELFTEST.md.)
+- What the 39 positions of LED chain 0 are: a 32-key unit has no lights above its keys.
 - How sustain and expression pedals are told apart on PA1, and which way a switch pedal moves it.
 - The jack wiring and the analog stages behind the sync, gate, pitch and mod pins (voltage
   ranges, filters, gate format switching).
 - The unit of the tempo value and the tick resolution of TIM2.
 - The purpose of TIM14.
-- Whether 0x41000–0x5FFFF is blank on a real unit; the settings block's 8-byte header; the
-  contents of the calibration files.
-- Keybed velocity divisor and curve; key numbering direction on the 32-key model.
+- The settings block's 8-byte header. (0x41000–0x5FFFF was blank on the unit read, and its
+  calibration files are described above.)
+- Keybed velocity divisor and curve: on a unit the SDK's velocities ran from 1 to 93 when played
+  by hand, so its scale may be short of the stock firmware's. (Key order on the 32-key model is
+  confirmed: SELFTEST.md.)
+- Everything behind the DIN, CV, gate and sync pins on a unit: none of them has been tried there.
 - Pins not configured by the firmware (PA11–PA14, PD7, PD10 and up, ports E and F): assumed
   unused or fixed-function.
 - Whether 1.0.4 changes any of this.

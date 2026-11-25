@@ -1,7 +1,7 @@
 /* KeyStep MK2000: the CV outputs - pitch, gate and the two mod outputs - with the stock firmware's
  * settings. Every number here is what the stock firmware 1.0.2 put into the same registers in the
- * emulator with a blank calibration (docs/STOCK-UI.md); what that is in volts at the sockets is
- * not known.
+ * emulator with a blank calibration (docs/STOCK-UI.md). The outputs have not been tried on a unit,
+ * so what that is in volts at the sockets is not known.
  *
  *   pitch, volts per octave   (note - reference) x 65536 / 120: ten octaves over the range
  *   pitch, hertz per volt     6553.6 at the reference note, doubling every octave

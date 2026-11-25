@@ -27,7 +27,7 @@ build app="hello":
 new app:
     make -C sdk APP={{ app }} new
 
-# Rehearse flashing an app: emulated device, model of the bootloader (nothing real is flashed yet)
+# Rehearse flashing an app: emulated device, model of the bootloader (nothing real is flashed; `just flash` does that)
 [group('firmware')]
 flash-sim app="hello":
     make -C sdk APP={{ app }} flash-sim

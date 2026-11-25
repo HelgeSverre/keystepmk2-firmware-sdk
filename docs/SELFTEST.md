@@ -5,9 +5,35 @@ OK, FAIL or SKIP per check on the display, tells the person at the unit what to 
 every result with its measured numbers to the computer over USB MIDI, where `tools/selftest.py`
 prints and saves them.
 
-**Status: emulator only.** `tools/selftest_emu.py` runs it from start to summary in the
-emulator. It has not run on a unit, and passing in the emulator says nothing about the
-hardware: finding out is what this firmware is for.
+**Status: run on one 32-key unit, 2026-11-25** (results below). `tools/selftest_emu.py` also
+runs it from start to summary in the emulator; passing there says nothing about the hardware.
+
+## Results on a unit
+
+Three runs on one 32-key unit. The last: 32 OK, 0 FAIL, 5 SKIP, 2 INFO.
+
+| Checks | Result |
+|---|---|
+| 1–5: USB, `ks_millis`, `ks_micros`, the timer, flash id and reads | OK. Flash id `C8 40 13`; the stock file system was found |
+| 6, 7: flash write, `ks_store` | SKIP in every run: MK2000 had used every sector of the SDK's area, so none was blank. These two have never run on a unit |
+| 8: sync loop | SKIP in every run: eight pulses sent with the jack empty, none counted. The emulator's model of an empty jack does not hold on the unit; sync out and in remain untested |
+| 9, 10: rest levels | Aftertouch 0 to 5; pedal socket 4087 to 4095 with nothing plugged in |
+| 11: strips at rest | OK, the touch controller answers |
+| 12–16: display, lights | OK, as judged by the person |
+| 17–30: buttons | OK, all 14. (One FAIL in the first run was the wrong button pressed) |
+| 31: encoder | OK, 4 right and 4 left |
+| 32: keys | OK, all 32 in order. Velocities from 1 to 93: 127 was not reached by hand |
+| 33, 34: strips | OK, 0 to 255 each |
+| 35: aftertouch | OK: from 2 at rest to 3279 |
+| 36: pedal | OK with a switch pedal: 4092 up, 37 down |
+| 37, 38: MIDI sockets, CV and gate | SKIP: declined. Never run on a unit |
+| 39: USB in | OK |
+| Clock | The unit counted +10 ppm against the computer over 27 minutes |
+
+The first two runs failed checks 35 and 36: the SDK read aftertouch and the pedal from each
+other's inputs. The stock firmware's code confirmed it ([HARDWARE.md](HARDWARE.md), Pedal), the
+driver was corrected, and the third run passed both. The first run also printed a clock error
+of +57 %: the tool paired pings with the wrong answers once their numbers repeated. Fixed.
 
 ## Run it on a unit
 
@@ -88,8 +114,9 @@ write.
 
 What the automatic part cannot know: check 8 passing with nothing plugged in rests on the
 emulator's model, in which an empty sync socket reads the unit's own output
-([MK2000.md](MK2000.md), Sync and routing). A SKIP there on a real unit means that model is
-wrong for the hardware, or that something is in the socket. Check 11 catches a phantom touch,
+([MK2000.md](MK2000.md), Sync and routing). On the unit it was a SKIP with the socket empty, so
+that model is wrong for the hardware; a patch cable from sync out to sync in would be needed,
+and that has not been tried. Check 11 catches a phantom touch,
 but a touch controller that never answers also reads "no finger"; checks 33 and 34 settle that.
 
 ### Guided
@@ -121,8 +148,8 @@ Each starts with a question: Play to test, Stop (or 15 s) to SKIP.
 | 38 | `cv` | `Meter on CV and gate?` | Eight steps, Play for the next. Each shows what is on the outputs, such as `Pitch 32768 Mods 2048` / `Gate 1: off` (gate format 1, gate off). Then `Did the outputs follow?` | OK only if you answer Play at the end; Stop at any step is FAIL; no answer is SKIP. |
 | 39 | `usb.in` | none | Nothing: `selftest.py receive` pings the unit every two seconds. | OK if a ping arrived during the run; SKIP if none did (no tool listening). |
 
-The CV steps, as raw values (what voltage each gives is exactly what is not known yet, so write
-down what the meter shows at each step):
+The CV steps, as raw values. This check has not been run on a unit, so what voltage each gives
+is not known: write down what the meter shows at each step.
 
 | Step | Pitch (0–65535) | Mod 1 and Mod 2 (0–4095) | Gate |
 |---|---|---|---|

@@ -27,7 +27,7 @@ Unofficial. Not affiliated with or endorsed by Arturia.
 | `tools/fwpack.py` | Reads, checks and builds images and packages |
 | `tools/emu.py` | Runs an image on the host: Cortex-M0+ with models of the display, flash, LEDs, keys, buttons, encoder and touch strips |
 | `tools/usbmodel.py` | The USB device controller and a host for it, used by the emulator |
-| `tools/ksflash.py` | The firmware update as MIDI Control Center does it; so far only run in the emulator |
+| `tools/ksflash.py` | The firmware update as MIDI Control Center does it: flash, read back, verify. Used on a unit ([FLASHING.md](docs/FLASHING.md)) |
 | `tools/flashdump.py` | Reassembles the external flash from the `flashdump` firmware's SysEx |
 | `tools/emutest.py` | Checks of the stock firmware and the SDK examples in the emulator |
 | `tools/fontextract.py` | Reads the stock display fonts out of an image, for the SDK |

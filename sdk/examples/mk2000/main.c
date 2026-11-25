@@ -221,7 +221,8 @@ static void follow(uint8_t from) {
 }
 
 /* Auto takes the first port that sends a clock or Start while it runs on its own clock. An
- * unplugged sync jack reads the sync output, so the jack only counts while that is quiet. */
+ * unplugged sync jack reads the sync output in the emulator's model, so the jack only counts while
+ * that is quiet. (On a unit the self-test saw no such loop: docs/SELFTEST.md.) */
 static int takes(uint8_t from) {
     if (source == from) return 1;
     return app.settings.sync_source == MK_SYNC_AUTO && source == MK_SYNC_INTERNAL &&

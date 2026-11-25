@@ -3,11 +3,19 @@
 Build firmware for the Arturia KeyStep mk2 in C and run it in the emulator and the KeyStep
 window.
 
-**Status: runs on a unit, barely tried there.** `flashdump`, `bootdump` and `mk2000` have been
-flashed to one 32-key unit with `just flash` ([FLASHING.md](../docs/FLASHING.md)). Shown to work on
-it: start-up, clock, USB enumeration and USB MIDI out, the external flash driver (reads), the Play
-button, and the update request. Everything else has only met the emulator's model of the board;
-the drivers follow what the stock firmware does ([HARDWARE.md](../docs/HARDWARE.md)).
+**Status: most drivers checked on one unit.** `flashdump`, `bootdump`, `selftest` and `mk2000`
+have been flashed to one 32-key unit with `just flash` ([FLASHING.md](../docs/FLASHING.md)). The
+self-test ([SELFTEST.md](../docs/SELFTEST.md)) ran there on 2026-11-25 with 32 OK, 0 FAIL, 5 SKIP:
+
+| On that unit | Drivers |
+|---|---|
+| Checked by the self-test | start-up, `ks_millis`/`ks_micros` (+10 ppm against the computer over 27 minutes), the timer, USB MIDI both ways, the display, the 13 button lights in four colours, all 14 buttons, the encoder, all 32 keys with velocity, both strips, aftertouch, the pedal socket (with a switch pedal), the external flash's id and reads, the update request |
+| Used by MK2000, not checked by the self-test | external flash erase and write, and `ks_store_*`: MK2000 has saved to the SDK's area, which left no blank sector for the self-test's write check |
+| Not tried | MIDI on the DIN sockets, pitch and mod CV, gate, sync out and in, the 39 lights of chain 0 |
+
+The untried drivers have only met the emulator's model of the board; they follow what the stock
+firmware does ([HARDWARE.md](../docs/HARDWARE.md)). The self-test found one error in that reading:
+aftertouch and the pedal were on each other's inputs. It is corrected.
 
 ![The hello example in the panel](../docs/panel-hello.png)
 
@@ -63,7 +71,7 @@ warnings.
 | `ks_encoder()` | detents turned since the last call, clockwise positive |
 | `ks_key_get(&event)` | key down and up events with velocity; `ks_keys_down()` gives the held keys as bits |
 | `ks_touch(strip)` | `KS_STRIP_BEND` or `KS_STRIP_MOD`: 0 to 255, or −1 with no finger |
-| `ks_led(led, 0xRRGGBB)`, `ks_leds_show()` | the 39 LEDs above the keys (`KS_LED_KEY(n)`) and the button LEDs (`KS_LED_SEQ` …) |
+| `ks_led(led, 0xRRGGBB)`, `ks_leds_show()` | the button LEDs (`KS_LED_SEQ` …) and the 39 positions of chain 0 (`KS_LED_KEY(n)`; nothing lights for them on a 32-key unit) |
 | `ks_midi_send(status, d1, d2)`, `ks_midi_send_byte(b)`, `ks_midi_get()`, `ks_midi_tx_free()` | MIDI on the DIN sockets, buffered |
 | `ks_midi_realtime(port, byte)` | define it to get each real-time byte (clock, Start, Stop, ...) from `KS_MIDI_DIN` or `KS_MIDI_USB` the moment it arrives, in the interrupt; the byte still reaches `ks_midi_get()` / `ks_usb_midi_get()` |
 | `ks_usb_ready()`, `ks_usb_midi_send(status, d1, d2)`, `ks_usb_midi_send_byte(b)`, `ks_usb_midi_get()`, `ks_usb_midi_tx_free()` | USB MIDI, both directions, SysEx included |
@@ -72,7 +80,7 @@ warnings.
 | `ks_gate(on)`, `ks_gate_format(format)` | the gate output and its three formats |
 | `ks_sync_out(line, on)`, `ks_sync_in(line)`, `ks_sync_pulses()` | sync clock and run lines; pulses counted on the clock input |
 | `ks_sync_clock_in()` | define it to hear each pulse on the clock input as it arrives, in the 65 µs interrupt |
-| `ks_aftertouch()`, `ks_pedal()` | the two analog inputs, 0 to 4095 |
+| `ks_aftertouch()`, `ks_pedal()` | the two analog inputs, 0 to 4095. On a unit: aftertouch 0 to 5 at rest and about 3300 pressed hard; the pedal socket about 4090 with nothing plugged in or a switch pedal up, about 40 with it down |
 | `ks_store_save(slot, data, len)`, `ks_store_load(slot, data, max)` | 31 numbered records of up to 4088 bytes in the external flash, with a checksum |
 | `ks_flash_id()`, `ks_flash_read()`, `ks_flash_erase()`, `ks_flash_write()` | the external flash directly; erase and write only work in the SDK's area (below) |
 | `ks_touch_present()`, `ks_analog_count()` | whether the touch controller answers on its bus; how many analog conversions have finished (it stands still if the converter does) |
@@ -125,12 +133,13 @@ can be drawn the same way by filling a `ks_font`.
 
 ## Not there yet
 
-- Calibrated CV: the unit's calibration files are not read, and no voltage has been measured.
+- Calibrated CV in the SDK itself: MK2000 reads the unit's calibration files and applies them
+  (`examples/mk2000/calib.c`); the SDK's `ks_cv_*` take raw values. No voltage has been measured.
 - Reading the stock firmware's patterns and settings (their layout is in
-  [HARDWARE.md](../docs/HARDWARE.md)) and its file system on the external flash.
+  [HARDWARE.md](../docs/HARDWARE.md)).
 - The 37-key model: the emulator can run it, the SDK drivers assume 32 keys and one encoder.
-- What the bootloader does with the marker `ks_enter_update_mode()` leaves, and the LED order
-  above the keys, are not known until checked on a device.
+- The lights of chain 0 (`KS_LED_KEY(n)`): the 32-key unit has no lights above its keys, and
+  what the 39 positions of that chain are has not been found.
 
 ## Rules
 
