@@ -323,7 +323,12 @@ def part_good() -> Human:
     expect(results, "sync.loop", "OK", sent=8, counted=8, hook_count=8, levels_followed=8, run_followed=1)
     expect(results, "aftertouch.rest", "INFO", min=REST_AFTERTOUCH, max=REST_AFTERTOUCH, mean=REST_AFTERTOUCH)
     expect(results, "pedal.rest", "INFO", min=REST_PEDAL, max=REST_PEDAL, mean=REST_PEDAL)
-    expect(results, "touch.rest", "OK", mod=-1, bend=-1)
+    expect(results, "touch.rest", "OK", mod=-1, bend=-1, controller_answers=1)
+    check(
+        "the converter ran while the inputs were measured",
+        results["aftertouch.rest"].named()["conversions"] > 100,
+        results["aftertouch.rest"].named(),
+    )
     expect(results, "encoder", "OK", right=4, left=-4)
     expect(results, "keys", "OK", fired=-1, released=-1, misordered=0, repeats=0)
     low, high = results["keys"].values[3:5]
@@ -486,6 +491,17 @@ def part_din() -> None:
     expect(results, "flash.write", "OK")
 
 
+def part_notouch() -> None:
+    """A unit whose touch controller does not answer: the automatic part must say so."""
+    human = boot()
+    human.board.touch_present = False
+    human.start()
+    human.run(100)
+    results = by_name(human.report())
+    expect(results, "touch.rest", "FAIL", "no touch controller", controller_answers=0)
+    expect(results, "aftertouch.rest", "INFO")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("words", nargs="*", help="run only the parts whose name contains one of these")
@@ -495,7 +511,7 @@ def main() -> int:
         return not args.words or any(word in name for word in args.words)
 
     human = None
-    for name, part in (("good", part_good), ("bad", None), ("din", part_din)):
+    for name, part in (("good", part_good), ("bad", None), ("din", part_din), ("notouch", part_notouch)):
         if not wanted(name):
             continue
         print(f"--- {name}", flush=True)

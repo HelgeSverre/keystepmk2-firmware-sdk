@@ -7,6 +7,8 @@
  *   pitch, hertz per volt     6553.6 at the reference note, doubling every octave
  *   bend                      range x 546 at either end of the strip
  *   mod output                value / 127 x 309 x Max Volt
+ *   vibrato                   a sine on the pitch output only, as deep as Wheel Vibrato says with
+ *                             the Mod strip at the top and in proportion below it; nothing in MIDI
  *
  * cv_note is called from the tick interrupt (the tracks, the arp) and from the main loop (the
  * keys); the rest from the main loop. */
@@ -23,6 +25,23 @@ static uint8_t value[MK_MOD_SOURCES];           /* 0 to 127 from each source */
 static volatile uint8_t pulse, retrig;          /* a pulse is on; the gate is down between two notes */
 static volatile uint32_t pulse_until, retrig_until;
 static uint32_t slid_at;
+static app_calibration calibration = { { 0, 0, 0 }, { 65535, 65535, 65535 } };
+static uint8_t calibrated, calibration_read;
+static uint32_t vib_phase;      /* the whole 32 bits are one turn */
+static int32_t vib;             /* what the vibrato adds now, in 256ths of a semitone */
+
+/* A quarter of a sine in 17 steps, 0 to 32767. */
+static const uint16_t quarter[17] = { 0,     3212,  6393,  9512,  12539, 15446, 18204, 20787, 23170,
+                                      25329, 27245, 28898, 30273, 31356, 32137, 32609, 32767 };
+
+static int32_t sine(uint32_t phase) {                  /* -32767 to 32767 */
+    uint32_t at = phase >> 14 & 0xFFFF, index = at >> 12, part = at & 0xFFF;       /* a quarter turn in 16 steps */
+    int quadrant = (int)(phase >> 30);
+    if (quadrant & 1) index = 15 - index, part = 0x1000 - part;
+    int32_t low = quarter[quadrant & 1 ? index + 1 : index], high = quarter[quadrant & 1 ? index : index + 1];
+    int32_t value = quadrant & 1 ? high + (low - high) * (int32_t)part / 0x1000 : low + (high - low) * (int32_t)part / 0x1000;
+    return quadrant & 2 ? -value : value;
+}
 
 static const mk_cv_settings *set(void) { return &app.settings.cv; }
 
@@ -35,9 +54,9 @@ static int32_t pitch_of(int note) {
     int reference = 12 * (s->pitch_ref > 5 ? 5 : s->pitch_ref);
     int32_t out;
     if (s->pitch_format == 0) {
-        out = (note - reference) * 65536 / 120 + (bend - 8192) * range / 15;
+        out = (note - reference) * 65536 / 120 + (bend - 8192) * range / 15 + vib * 32 / 15;
     } else {
-        int32_t at = (note - reference) * 256 + (bend - 8192) * range / 32;     /* 256ths of a semitone */
+        int32_t at = (note - reference) * 256 + (bend - 8192) * range / 32 + vib;       /* 256ths of a semitone */
         int octave = 0;
         while (at < 0) at += 12 * 256, octave--;
         while (at >= 12 * 256) at -= 12 * 256, octave++;
@@ -53,7 +72,8 @@ static void mod_out(int output) {
     int volts = s->mod_volts[output] < 1 ? 1 : s->mod_volts[output] > 10 ? 10 : s->mod_volts[output];
     int source = s->mod_source[output] < MK_MOD_SOURCES ? s->mod_source[output] : MK_MOD_VELOCITY;
     int counts = value[source] * 309 * volts / 127;
-    ks_cv_mod(output, (uint16_t)(counts > 4095 ? 4095 : counts));
+    if (counts > 4095) counts = 4095;
+    ks_cv_mod(output, (uint16_t)(calib_apply(&calibration, 1 + output, counts << 4) >> 4));     /* the DAC's 12 bits, left-aligned */
 }
 
 static void mods(void) {
@@ -65,7 +85,7 @@ static void pitch_set(int slide) {
     pitch_target = pitch_of(last);
     if (slide) return;                                  /* cv_poll walks there */
     pitch_now = pitch_target;
-    ks_cv_pitch((uint16_t)pitch_now);
+    ks_cv_pitch((uint16_t)calib_apply(&calibration, 0, pitch_now));
 }
 
 void cv_note(uint8_t note, uint8_t velocity) {
@@ -119,7 +139,13 @@ void cv_bend(int bend14) {
 }
 
 /* The settings were changed: the outputs show them at once. */
+int cv_calibrated(void) { return calibrated; }
+
 void cv_apply(void) {
+    if (!calibration_read) {                            /* once, at start-up: a few reads of the flash */
+        calibration_read = 1;
+        calibrated = (uint8_t)calib_read(&calibration);
+    }
     uint32_t state = app_lock();
     ks_gate_format(set()->gate_format > 2 ? 1 : set()->gate_format);
     pitch_set(0);
@@ -138,11 +164,22 @@ void cv_poll(uint32_t now) {
         retrig = 0;
         ks_gate(holders != 0);
     }
+    int depth = set()->vibrato > 120 ? 120 : set()->vibrato, wheel = value[MK_MOD_WHEEL];
+    if (depth && wheel) {                               /* a millisecond of the sine, and the pitch with it */
+        int rate = set()->vibrato_rate < 3 ? 10 : set()->vibrato_rate > 100 ? 100 : set()->vibrato_rate;
+        vib_phase += (uint32_t)rate * 429497u * (now - slid_at > 50 ? 1 : now - slid_at);       /* 2^32 / 10000 a ms */
+        vib = sine(vib_phase) / 128 * depth * wheel / 1270;     /* depth: tenths of a semitone; wheel: of 127 */
+        pitch_set(pitch_now != pitch_target);
+    } else if (vib) {
+        vib = 0;
+        vib_phase = 0;
+        pitch_set(pitch_now != pitch_target);
+    }
     for (; pitch_now != pitch_target && slid_at != now; slid_at++) {    /* Legato Slide: a twelfth of the way every ms */
         int32_t left = pitch_target - pitch_now;
         pitch_now = left > -12 && left < 12 ? pitch_target : pitch_now + left / 12;
         if ((uint32_t)(now - slid_at) > 50) slid_at = now - 1;
-        ks_cv_pitch((uint16_t)pitch_now);
+        ks_cv_pitch((uint16_t)calib_apply(&calibration, 0, pitch_now));
     }
     slid_at = now;
     app_unlock(state);

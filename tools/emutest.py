@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import itertools
 import re
+import struct
 import sys
 from pathlib import Path
 
@@ -510,7 +511,7 @@ def check_mk_global_settings() -> str:
     assert "At once" in small_text(board), small_text(board)
     menu_to(board, "About")  # the last entry
     tap(board, "encoder")
-    assert "of 31 sectors" in small_text(board), small_text(board)
+    assert "/31" in small_text(board) and "CV: no calib" in small_text(board), small_text(board)
     tap(board, "back")
     tap(board, "back")
     mk_record_steps(board, ("k0", "k2", "k4", "k5"))
@@ -1259,6 +1260,30 @@ def check_mk_cv() -> str:
         board.release("k7")
         board.run(30)
     assert len(seen) >= 4 and max(seen) <= 1545, f"Random: another level at every note: {seen}"
+    cv_page()  # Wheel Vibrato: a sine on the pitch output, as stock: 12 st either way at 1 Hz, nothing in MIDI
+    menu_set(board, "Wheel Vibrato", 24)
+    assert shows(board, "l2.0 st"), all_text(board)
+    leave()
+    board.press("k7")
+    board.set_touch(0, 1.0)
+    board.run(100)
+    board.midi_out.clear()
+    wave = []
+    for _ in range(220):
+        board.run(10)
+        wave.append(board.outputs()["pitch"])
+    low, high = min(wave), max(wave)
+    middle = (low + high) / 2
+    crossings = [i for i in range(1, len(wave)) if (wave[i - 1] < middle) != (wave[i] < middle)]
+    period = (crossings[-1] - crossings[0]) * 10 * 2 / (len(crossings) - 1)
+    assert near(high - low, 13090, 400) and near(middle, 13106, 150), f"12 st either way of the note: {low} to {high}"
+    assert near(period, 1000, 30), f"1 Hz: {period} ms"
+    assert not [b for b in board.midi_out if b & 0xF0 == 0xE0], "the vibrato is on the CV output only"
+    board.set_touch(0, 0.0)
+    board.run(100)
+    assert near(board.outputs()["pitch"], 13106, 2), "the strip at the bottom: no vibrato"
+    board.set_touch(0, None)
+    board.release("k7")
     board.run(2500)  # the settings are written
     again = mk2000(flash=bytes(board.flash.mem))
     assert again.outputs()["gate_format"] == 2, "the CV settings come back after a restart"
@@ -1434,6 +1459,78 @@ def check_mk_spice() -> str:
     return "Shift + strips set Gate and Spice and send nothing, Spice varies each step the same every pass, three taps roll the dice"
 
 
+def stock_file_system(files: dict[str, bytes], churn: bool = False) -> bytes:
+    """A flash image with a stock-like file system at 0x60000 holding `files`. With `churn`, files
+    are also created, rewritten and deleted around them, as a unit's history would have done."""
+    from littlefs import LittleFS  # needs: uv run --with littlefs-python
+
+    fs = LittleFS(block_size=0x1000, block_count=32, read_size=0x80, prog_size=0x80, cache_size=0x80, lookahead_size=0x20, name_max=0x20)  # fmt: skip
+
+    def write(name: str, data: bytes) -> None:
+        with fs.open(name, "wb") as f:
+            f.write(data)
+
+    write("boot_count", bytes(4))
+    fs.mkdir("calib")
+    if churn:
+        write("calib/aft_factory", bytes(range(24)))
+        write("calib/a_first", b"gone soon")
+    for name, data in files.items():
+        if churn:
+            write(name, bytes(16))  # an earlier calibration, overwritten below
+        write(name, data)
+    if churn:
+        fs.remove("calib/a_first")  # the entries after it move down a place
+        write("calib/zz_later", bytes(40))
+        for count in range(1, 6):
+            write("boot_count", count.to_bytes(4, "little"))
+    image = bytearray(b"\xff" * emu.NorFlash.SIZE)
+    image[0x60000:0x80000] = fs.context.buffer
+    return bytes(image)
+
+
+def check_mk_calibration() -> str:
+    numbers = {
+        "calib/pitch": (0, -20, 65535, 65553),
+        "calib/mod1": (0, -41, 65535, 66008),
+        "calib/mod2": (0, -53, 65535, 65805),
+    }
+    files = {name: struct.pack("<4i", *values) for name, values in numbers.items()}
+
+    def outputs(flash: bytes | None) -> tuple[int, int, int, str]:
+        board = mk2000(flash=flash) if flash else mk2000()
+        board.press("k7")
+        board.set_touch(0, 1.0)
+        board.run(80)
+        out = board.outputs()
+        sent_ = bytes(b for b in board.midi_out if b < 0xF8)
+        velocity = next(sent_[i + 2] for i in range(0, len(sent_) - 2, 3) if sent_[i] & 0xF0 == 0x90)
+        board.release("k7")
+        board.set_touch(0, None)
+        tap(board, "encoder")
+        menu_to(board, "About")
+        tap(board, "encoder")
+        return out["pitch"], out["mod1"], out["mod2"], velocity, small_text(board)
+
+    pitch_, mod1, mod2, velocity, about = outputs(None)
+    assert (pitch_, mod2) == (13107, 1545) and "CV: no calib" in about, f"no files: as before: {pitch_} {mod2} {about}"
+    for churn in (False, True):
+        pitch_, mod1, mod2, velocity, about = outputs(stock_file_system(files, churn))
+        want_mod1 = (-41 + (velocity * 1545 // 127 << 4) * (66008 + 41) // 65535) >> 4
+        assert near(pitch_, 13093, 1), f"pitch corrected as the stock firmware does on this file (13093): {pitch_}"
+        assert near(mod2, 1549, 1) and near(mod1, want_mod1, 1), f"mod outputs corrected: {mod1} {mod2}"
+        assert "CV: calibrated" in about, about
+    off = dict(files)
+    off["calib/pitch"] = struct.pack("<4i", 0, 30000, 65535, 65535)  # not a calibration: left out
+    del off["calib/mod1"]
+    pitch_, mod1, mod2, velocity, about = outputs(stock_file_system(off))
+    assert pitch_ == 13107 and near(mod2, 1549, 1) and mod1 == velocity * 1545 // 127, (
+        f"only mod 2 usable: {pitch_} {mod1} {mod2}"
+    )
+    assert "CV: partly" in about, about
+    return "the unit's calibration files are found in the stock file system and applied as stock applies them"
+
+
 def check_mk_scale() -> str:
     board = mk2000()
     shift_key(board, "chord")
@@ -1478,6 +1575,39 @@ def check_mk_scale() -> str:
     arp = {n for _c, n in notes(board)}
     assert arp == {60, 65}, f"the arp plays the fitted notes: {arp}"
     return "global and pattern scale and root on the keys, recording and the arp; saved with the pattern"
+
+
+def check_mk_user_scale() -> str:
+    board = mk2000()
+    shift_key(board, "chord")
+    menu_to(board, "Pattern Scale")
+    tap(board, "encoder")
+    turn(board, 20)  # to the end of the list: User
+    assert shows(board, "User") and "keys: in, out" in small_text(board), all_text(board)
+    board.midi_out.clear()
+    for key in ("k9", "k11", "k7"):  # D and E out; C is the root and stays
+        tap(board, key)
+    assert notes(board) == [], "the keys edit the scale here and do not play"
+    tap(board, "encoder")
+    tap(board, "back")
+    played_ = [struck(board, key)[0] - 60 for key in KEYS_FROM_C]
+    assert played_ == [0, 1, 1, 3, 3, 5, 6, 7, 8, 9, 10, 11], f"D and E taken out, as stock plays it: {played_}"
+    assert "C Usr" in small_text(board), small_text(board)
+    save_pattern(board)
+    shift_key(board, "chord")
+    menu_to(board, "Pattern Scale")
+    tap(board, "encoder")
+    tap(board, "k9")  # D back in
+    tap(board, "encoder")
+    menu_set(board, "Pattern Root", 2)  # on D: its notes move up two
+    tap(board, "back")
+    on_d = [struck(board, key)[0] - 60 for key in KEYS_FROM_C]
+    assert on_d == [0, 1, 2, 3, 4, 5, 5, 7, 8, 9, 10, 11], f"only E taken out, counted from D: F# goes: {on_d}"
+    shift_key(board, "k29")  # Reload
+    board.run(200)
+    again = [struck(board, key)[0] - 60 for key in KEYS_FROM_C]
+    assert again == played_, f"the user scale is saved with the pattern: {again}"
+    return "the keys put notes in and out of the pattern's user scale, the root stays, saved with the pattern"
 
 
 def check_mk_chord() -> str:
@@ -1547,10 +1677,20 @@ def check_mk_chord() -> str:
     held_page(board, "chord")
     menu_set(board, "Strum (ms)", -40)
     menu_set(board, "Strum Type", -2)
-    menu_set(board, "Voicing", 1)
+    menu_set(board, "Voicing", 2)
+    assert shows(board, "Bass -l"), all_text(board)
     tap(board, "back")
     assert struck(board, "k9") == [50, 62, 66, 69], "Bass -1: the root an octave down as well"
     held_page(board, "chord")
+    menu_set(board, "Preset", 1)  # min
+    menu_set(board, "Voicing", -1)
+    assert shows(board, "On"), all_text(board)
+    tap(board, "back")
+    voiced = [struck(board, key) for key in ("k7", "k12", "k14", "k9", "k19", "k7")]
+    stock_played = [[60, 63, 67], [65, 68, 60], [67, 70, 62], [62, 65, 69], [72, 75, 79], [60, 63, 67]]
+    assert voiced == stock_played, f"Voicing On: each chord near the one before, as stock played them: {voiced}"
+    held_page(board, "chord")
+    menu_set(board, "Preset", -1)
     menu_set(board, "Voicing", -1)
     tap(board, "back")
     # the user chord, the stock way: Chord held, keys played
@@ -1989,10 +2129,12 @@ CHECKS = {
     "mk2000 controls": check_mk_controls,
     "mk2000 mutate": check_mk_mutate,
     "mk2000 cv": check_mk_cv,
+    "mk2000 calibration": check_mk_calibration,
     "mk2000 shared notes": check_mk_shared_notes,
     "mk2000 step list": check_mk_step_list,
     "mk2000 spice": check_mk_spice,
     "mk2000 scale": check_mk_scale,
+    "mk2000 user scale": check_mk_user_scale,
     "mk2000 chord": check_mk_chord,
     "mk2000 arp settings": check_mk_arp_settings,
     "mk2000 count-in": check_mk_count_in,

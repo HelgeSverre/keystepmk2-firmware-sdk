@@ -196,7 +196,7 @@ static int quiet;                       /* same_pattern does not say where they 
 
 /* Field by field; prints the first difference. */
 static int same_pattern(const mk_pattern *a, const mk_pattern *b) {
-    if (a->tempo != b->tempo || a->scale != b->scale || a->root != b->root) {
+    if (a->tempo != b->tempo || a->scale != b->scale || a->root != b->root || a->user_scale != b->user_scale) {
         SAY("  pattern fields differ\n");
         return 0;
     }
@@ -438,6 +438,26 @@ static void write_format1(int slot, int extra) {
     uint32_t hcrc = crc32(sector, 20);
     for (int i = 0; i < 4; i++) sector[20 + i] = (uint8_t)(hcrc >> 8 * i);
     memcpy(sector + 32, payload, len);
+}
+
+/* A user scale is two bytes after the last track, there only when the pattern has one. */
+static void test_user_scale(void) {
+    make_typical(&a, 4);
+    CHECK_EQ(sectors_for(&a), 1);
+    int plain = stored_bytes(7);
+    a.scale = MK_PATTERN_SCALE_USER;                    /* chosen but not edited: nothing more is stored */
+    a.root = 7;
+    CHECK_EQ(sectors_for(&a), 1);
+    CHECK_EQ(stored_bytes(7), plain);
+    a.user_scale = 0x0A95;
+    CHECK_EQ(sectors_for(&a), 1);
+    CHECK_EQ(stored_bytes(7), plain + 2);
+    a.track[2].step[11].offset = 30;                    /* with offsets as well */
+    CHECK_EQ(sectors_for(&a), 1);
+    make_worst(&a, 6);                                  /* and on the biggest pattern there is */
+    a.user_scale = 0x0FFF;
+    CHECK_EQ(sectors_for(&a), 2);
+    printf("ok user_scale\n");
 }
 
 static void test_format1(void) {
@@ -1012,6 +1032,7 @@ int main(void) {
     test_blank();
     test_round_trips();
     test_offsets();
+    test_user_scale();
     test_format1();
     test_fill();
     test_overwrite();

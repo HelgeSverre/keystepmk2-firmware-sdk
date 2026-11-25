@@ -101,7 +101,7 @@ static void top_line(void) {
     right(SMALL, TOP, division);
     int root, scale = app_scale(&root);                 /* the scale the keys are held to, where there is room */
     if (!scale) return;
-    put(put(put(line, mk_root_name[root]), " "), mk_scale_short[scale]);
+    put(put(put(line, mk_root_name[root]), " "), scale & 0x1000 ? "Usr" : mk_scale_short[scale]);
     int room = KS_OLED_W - ks_font_width(SMALL, division) - x, width = ks_font_width(SMALL, line);
     if (width + 8 <= room) text(SMALL, x + (room - width) / 2, TOP, line);
 }

@@ -76,9 +76,9 @@ needs the person, *optional* begins with a question and is skipped with Stop.
 | 6 | `flash.write` | In the highest sector of the SDK's area that reads entirely `FF`: writes 300 bytes across two page ends, reads them back, erases the sector, reads it blank. | All of that. SKIP with no blank sector or an unknown chip. |
 | 7 | `flash.store` | In the same sector: `ks_store_save`, `ks_store_load`, erase, and a load that must now find nothing. | All of that. SKIP unless check 6 passed. |
 | 8 | `sync.loop` | Eight 5 ms pulses on the sync clock output and one on the run line, with nothing in the sync socket. Counts them with `ks_sync_pulses`, the `ks_sync_clock_in` hook and `ks_sync_in`. | All eight clock pulses arrive each way. SKIP if none arrives at all; FAIL if some do. The run line is reported (`run_followed`) and not judged. |
-| 9 | `aftertouch.rest` | 250 readings of `ks_aftertouch` over a second with nothing pressed. | Never OK: INFO with the numbers. FAIL only for a value outside 0–4095. |
+| 9 | `aftertouch.rest` | 250 readings of `ks_aftertouch` over a second with nothing pressed. | Never OK: INFO with the numbers. FAIL for a value outside 0–4095, or if the converter did not run meanwhile. |
 | 10 | `pedal.rest` | The same for `ks_pedal`. | As 9. |
-| 11 | `touch.rest` | Reads both strips for half a second. | Both say "no finger" throughout. |
+| 11 | `touch.rest` | Asks the touch controller for its register 4, then reads both strips for half a second. | The controller answers, and both strips say "no finger" throughout. |
 
 Flash safety: checks 6 and 7 are the only writes in the firmware. They go to one sector between
 `0x41000` and `0x5FFFF` that was just read as blank, and that sector is erased and read back
@@ -159,8 +159,8 @@ down what the meter shows at each step):
 | `flash.write` | `sector` address; `write_result`, `erase_result` (0, or a `KS_FLASH_` code: −2 is a timeout); `bytes_wrong` on read-back; `bytes_left` not blank after the erase; `write_ms`, `erase_ms`. The erase time is worth having: the SDK gives an erase 500 ms. |
 | `flash.store` | `slot`; `save_result`; `load_result` (64, the record's length); `bytes_wrong`; `erase_result`; `bytes_left`; `load_after_erase` (−4, empty). |
 | `sync.loop` | `sent` 8; `counted` by `ks_sync_pulses`; `hook_count` by `ks_sync_clock_in`; `levels_followed`, pulses during which `ks_sync_in` read the level put out; `run_followed` 0 or 1; `idle_levels` before the first pulse (bit 0 clock, bit 1 run; 0 expected). |
-| `aftertouch.rest`, `pedal.rest` | `min`, `max`, `mean` of `samples` readings, 0–4095. |
-| `touch.rest` | `mod`, `bend`: the last readings, −1 for no finger. |
+| `aftertouch.rest`, `pedal.rest` | `min`, `max`, `mean` of `samples` readings, 0–4095; `conversions`: how many the converter finished meanwhile. |
+| `touch.rest` | `mod`, `bend`: the last readings, −1 for no finger; `controller_answers`: 1 or 0. |
 | `display` | `answer`: 1 Play, 0 Stop, −1 none. |
 | `leds.*` | `colour` sent, `0xRRGGBB`. |
 | `button.*` | `expected` and `seen` as `KS_BTN_` bits; `held_before`, buttons already down when the check began (a stuck one shows here). |

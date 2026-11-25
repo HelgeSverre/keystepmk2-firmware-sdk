@@ -19,7 +19,7 @@
  * higher seq wins and the other is retired. Everything else - blank, half written, retired, erase
  * garbage, records of the old ks_store_* ("KSS1") - is free, and erased when it is next used.
  *
- * Pattern payload: tempo (u16), scale, root; then per track its 12 setting bytes, a 64-bit mask of
+ * Pattern payload (a user scale, u16, follows the last track when the pattern has one): tempo (u16), scale, root; then per track its 12 setting bytes, a 64-bit mask of
  * the steps that differ from an empty one, and those steps. A step starts with a byte saying which
  * fields differ: 1 notes, 2 gate, 4 probability, 8 ratchet, 16 condition, 32 flags, 64 controllers,
  * 128 offset (format 2 only). Notes are a byte of the poly slots in use, then note and velocity for
@@ -54,7 +54,7 @@
 #define STEP_OFFSET 0x80
 #define TRACK_BYTES 12
 #define STEP_BYTES (2 * MK_POLY + 5 + MK_CONTROLLERS + 1)     /* raw, in format 2 */
-#define PATTERN_MAX (4 + MK_TRACKS * (TRACK_BYTES + 8 + MK_STEPS * (1 + STEP_BYTES)))
+#define PATTERN_MAX (4 + MK_TRACKS * (TRACK_BYTES + 8 + MK_STEPS * (1 + STEP_BYTES)) + 2)    /* + the user scale */
 #define PARTS_MAX 2
 _Static_assert(PATTERN_MAX <= PARTS_MAX * PAYLOAD_MAX, "the worst-case pattern must fit in PARTS_MAX sectors");
 _Static_assert(SECTORS <= 32, "the sector map is a 32-bit word");
@@ -579,6 +579,10 @@ static void encode_pattern(const void *data) {
         for (int s = 0; s < MK_STEPS; s++)
             if (mask[s / 32] >> s % 32 & 1) encode_step(&track->step[s]);
     }
+    if (pattern->user_scale) {                      /* at the end, and only when there is one */
+        put((uint8_t)pattern->user_scale);
+        put((uint8_t)(pattern->user_scale >> 8));
+    }
 }
 
 static void decode_step(mk_step *step) {
@@ -641,6 +645,10 @@ static void decode_pattern(mk_pattern *pattern) {
         get_n(mask, 8);
         for (int s = 0; s < MK_STEPS && !in.error; s++)
             if (mask[s / 8] >> s % 8 & 1) decode_step(&track->step[s]);
+    }
+    if (!in.error && in.left == 2) {                /* a user scale follows the tracks when the pattern has one */
+        pattern->user_scale = get();
+        pattern->user_scale |= (uint16_t)(get() << 8);
     }
 }
 

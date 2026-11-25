@@ -241,7 +241,7 @@ svg.unitsvg .ubtn[data-b]:focus-visible rect:last-of-type { stroke: var(--blue);
       <div class="tw"><table>
         <tr><td>Strum</td><td>0–80 ms from one note to the next</td></tr>
         <tr><td>Strum Type</td><td>Up, Alt Up, Down, Alt Down, Random</td></tr>
-        <tr><td>Voicing</td><td>Bass −1, −2, −3: the root that many octaves down as well</td></tr>
+        <tr><td>Voicing</td><td>On: each chord stays in the register of the one before. Bass −1, −2, −3: the root that many octaves down as well</td></tr>
       </table></div>
       <p class="small">Chords are recorded whole. With the arp on, it runs over the chord of each key.</p>
     </div>
@@ -250,7 +250,8 @@ svg.unitsvg .ubtn[data-b]:focus-visible rect:last-of-type { stroke: var(--blue);
       <p><kbd class="sh">Shift</kbd> + <kbd>Chord</kbd> opens the scale page. A key outside the scale plays the nearest note in it. That goes for notes, chords, the arp and recording.</p>
       <div class="tw"><table>
         <tr><td>Global Scale, Root</td><td>For every pattern without its own</td></tr>
-        <tr><td>Pattern Scale</td><td>Global, a scale of its own, or Off. Saved with the pattern</td></tr>
+        <tr><td>Pattern Scale</td><td>Global, a scale of its own, User, or Off. Saved with the pattern</td></tr>
+        <tr><td>User</td><td>Your own scale: with Pattern Scale open on User, each key puts its note in or out. The root stays in</td></tr>
       </table></div>
       <p class="small">Major, Minor, Dorian, Phrygian, Lydian, Mixolydian, Locrian, Harmonic Minor, Blues, Pentatonic Major and Minor, Japanese, Gypsy, Arabic, Freygish.</p>
     </div>
@@ -298,8 +299,10 @@ svg.unitsvg .ubtn[data-b]:focus-visible rect:last-of-type { stroke: var(--blue);
         <tr><td>Gate Retrig</td><td>Mono, Legato, Legato Slide</td></tr>
         <tr><td>Mod 1, Mod 2 Source</td><td>Velocity, Aftertouch, ModWheel, Random, Pulse</td></tr>
         <tr><td>Mod 1, Mod 2 Max Volt</td><td>1–10 V</td></tr>
+        <tr><td>Wheel Vibrato</td><td>0–12 semitones: the Mod strip wobbles the pitch output. CV only</td></tr>
+        <tr><td>Vibrato Rate</td><td>0.3–10 Hz</td></tr>
       </table></div>
-      <p class="small">A unit's own calibration is not applied yet, so pitch may be slightly off.</p>
+      <p class="small">Your unit's factory calibration is used: About says <b>CV: calibrated</b> when it was found.</p>
     </div>
   </div>
 </section>
@@ -338,7 +341,7 @@ svg.unitsvg .ubtn[data-b]:focus-visible rect:last-of-type { stroke: var(--blue);
     <div style="display:flex;flex-direction:column;gap:10px">
       <h2>Memory</h2>
       <p>MK2000 keeps its patterns where Arturia's firmware never looks, and never touches Arturia's patterns, settings or calibration. Switch between the two as often as you like: each finds its own as it left them.</p>
-      <p class="small">Installing and going back: <a href="FLASHING.md">FLASHING.md</a>. Not built yet: the User scale, vibrato, CV calibration.</p>
+      <p class="small">Installing and going back: <a href="FLASHING.md">FLASHING.md</a>.</p>
     </div>
   </div>
 </section>

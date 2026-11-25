@@ -20,6 +20,17 @@ static uint32_t key_due[KS_KEYS];       /* when the next note of its chord is to
  * when the last of them lets go. The same for the pitches the keys have put into the arp. */
 static uint8_t sounding[128], sounding_channel[128], in_arp[128];
 static uint8_t learned[MK_CHORD_NOTES]; /* Chord held: the keys played into the user chord */
+/* Voicing On: the range the last chord sounded in, and each key's chord as built, which is what
+ * the voicing is told about when the key is let go. */
+static mk_voicing voicing;
+static uint8_t key_raw[KS_KEYS][MK_CHORD_NOTES], key_raw_n[KS_KEYS];
+
+/* The chord settings changed. A new Voicing starts the voicing afresh; any change empties its
+ * window, as the stock firmware's empty release on leaving the chord menu does. */
+void ui_chord_changed(int voicing_too) {
+    if (voicing_too) mk_voicing_set(&voicing, app.settings.chord.voicing == MK_VOICING_ON);
+    mk_voicing_process(&voicing, 0, 0, 0);
+}
 static uint8_t chord_keys, chord_tie;   /* step recording: keys of the chord still down; Hold was pressed with them */
 static uint8_t rec_started;             /* this recording has taken its first note */
 static uint8_t rec_replacing;           /* and it started the track over */
@@ -372,7 +383,16 @@ static void key_down(int key, uint8_t velocity, uint32_t buttons, uint32_t now) 
     uint8_t *notes = key_notes[key];
     int n = 1;
     notes[0] = (uint8_t)note;
-    if (use == PAGE_KEY_PLAYS && app.settings.chord.on) n = mk_chord_notes(&app.settings.chord, note, scale, root, notes);
+    key_raw_n[key] = 0;
+    if (use == PAGE_KEY_PLAYS && app.settings.chord.on && app.settings.chord.voicing == MK_VOICING_ON) {
+        n = mk_chord_raw(&app.settings.chord, note, key_raw[key]);      /* root, then its intervals: the order is kept */
+        key_raw_n[key] = (uint8_t)n;
+        for (int i = 0; i < n; i++) notes[i] = key_raw[key][i];
+        mk_voicing_process(&voicing, 1, notes, n);
+        n = mk_chord_fit(notes, n, scale, root);
+    } else if (use == PAGE_KEY_PLAYS && app.settings.chord.on) {
+        n = mk_chord_notes(&app.settings.chord, note, scale, root, notes);
+    }
     key_count[key] = (uint8_t)n;
     key_sent[key] = 0;
     key_velocity[key] = velocity;
@@ -395,6 +415,10 @@ static void key_down(int key, uint8_t velocity, uint32_t buttons, uint32_t now) 
 
 static void key_up(int key) {
     uint8_t role = key_role[key];
+    if (key_raw_n[key]) {                               /* the voicing takes down what this chord sounded as */
+        mk_voicing_process(&voicing, 0, key_raw[key], key_raw_n[key]);
+        key_raw_n[key] = 0;
+    }
     if (role == KEY_LATCHED) return;                    /* pressed again while latched: already handled */
     key_role[key] = KEY_FREE;
     if (role == KEY_ARP) {                              /* a pitch another key still holds stays in */
@@ -463,6 +487,7 @@ static void turned(int by, uint32_t buttons) {
         int preset = app.settings.chord.preset + by;
         app.settings.chord.preset = (uint8_t)(preset < 0 ? 0 : preset >= MK_CHORD_COUNT ? MK_CHORD_COUNT - 1 : preset);
         app.settings_dirty = 1;
+        ui_chord_changed(0);
     } else if (buttons & KS_BTN_TEMPO) {
         tempo_tapped = 0;                               /* that press was to turn, not a tap */
         set_tempo(mk_engine_pattern()->tempo + 10 * by);
@@ -620,6 +645,7 @@ static void released_button(uint32_t button, uint32_t now) {
             mk_chord_learn(chord, learned, app.learning);
             chord->preset = MK_CHORD_USER;
             chord->on = 1;
+            ui_chord_changed(0);
             app.settings_dirty = 1;
             app_message("User Chord Recorded");
         } else if (!combo_used && now - chord_at < TAP_MS) {

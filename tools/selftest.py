@@ -34,7 +34,7 @@ FORMAT = 1
 # id: (name, kind, the names of its values; ":x" marks one shown in hex). The ids and the order
 # of the values are the firmware's (selftest.h, auto.c, guided.c).
 _BUTTONS = ("seq", "arp", "mutate", "chord", "tempo", "record", "stop", "play", "shift", "hold", "oct-", "oct+", "back")
-_REST = ("min", "max", "mean", "samples")
+_REST = ("min", "max", "mean", "samples", "conversions")
 _STRIP = ("min", "max", "first", "last", "released", "other_strip_touched")
 CHECKS: dict[int, tuple[str, str, tuple[str, ...]]] = {
     1: ("usb.ready", "auto", ("ready", "waited_ms")),
@@ -63,7 +63,7 @@ CHECKS: dict[int, tuple[str, str, tuple[str, ...]]] = {
     8: ("sync.loop", "auto", ("sent", "counted", "hook_count", "levels_followed", "run_followed", "idle_levels")),
     9: ("aftertouch.rest", "auto", _REST),
     10: ("pedal.rest", "auto", _REST),
-    11: ("touch.rest", "auto", ("mod", "bend")),
+    11: ("touch.rest", "auto", ("mod", "bend", "controller_answers")),
     12: ("display", "guided", ("answer",)),
     13: ("leds.red", "guided", ("colour:x",)),
     14: ("leds.green", "guided", ("colour:x",)),

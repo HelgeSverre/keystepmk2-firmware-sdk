@@ -7,6 +7,7 @@
  *   harmony.c   scales and chords: tables and arithmetic; no hardware access
  *   mutate.c    Mutate: a variation of a track; no hardware access
  *   cv.c        the CV outputs and their settings
+ *   calib.c     the unit's CV calibration, read from the stock firmware's files
  *   controls.c  the strips, aftertouch and the pedal: what they send, and recording them
  *   pages.c     the menu pages: steps, track and global settings, chain
  *   screens.c   the display
@@ -91,8 +92,10 @@ typedef struct {
 typedef struct {
     uint16_t tempo;                     /* tenths of a BPM, 300 to 2400 */
     uint8_t scale;                      /* 0 = the global scale, MK_SCALE_MAJOR and up = this scale,
-                                           MK_PATTERN_SCALE_OFF = none */
+                                           MK_PATTERN_SCALE_OFF = none, MK_PATTERN_SCALE_USER = user_scale */
     uint8_t root;                       /* of the pattern's own scale: 0 (C) to 11 (B) */
+    uint16_t user_scale;                /* the pattern's user scale: bit n set = n semitones above the root is
+                                           in it. 0 = not edited yet: all twelve. The root is always in */
     mk_track track[MK_TRACKS];
 } mk_pattern;
 
@@ -198,12 +201,16 @@ enum {
 };
 #define MK_PATTERN_SCALE_GLOBAL 0
 #define MK_PATTERN_SCALE_OFF MK_SCALE_COUNT
+#define MK_PATTERN_SCALE_USER (MK_SCALE_COUNT + 1)
+/* Where a scale is asked for, a user scale can be given instead: its twelve bits, marked. */
+#define MK_SCALE_USER(notes) (0x1000 | ((notes) & 0xFFF))
 extern const char *const mk_scale_name[MK_SCALE_COUNT];        /* the stock names: "Off", "Major", ... "Freygish" */
 extern const char *const mk_scale_short[MK_SCALE_COUNT];       /* three letters: "", "Maj", "Min", ... */
 extern const char *const mk_root_name[12];                     /* "C", "C#", ... "B" */
 
 /* The note of the scale nearest to `note` (0 to 127), the lower one when two are as near, as the
- * stock firmware does. MK_SCALE_OFF, or anything that is not a scale, leaves the note alone. */
+ * stock firmware does. `scale` is a MK_SCALE_ or MK_SCALE_USER(notes). MK_SCALE_OFF, or anything
+ * that is not a scale, leaves the note alone. */
 int mk_scale_fit(int note, int scale, int root);
 
 enum {
@@ -221,7 +228,8 @@ typedef struct {
     uint8_t preset;                     /* MK_CHORD_ */
     uint8_t strum;                      /* milliseconds from one note to the next, 0 to MK_STRUM_MAX */
     uint8_t strum_type;                 /* MK_STRUM_ */
-    uint8_t voicing;                    /* 0 = off, 1 to 3 = the root that many octaves down as well */
+    uint8_t voicing;                    /* 0 = off, 1 to 3 = the root that many octaves down as well,
+                                           MK_VOICING_ON = each chord kept near the one before (mk_voicing) */
     uint8_t user[3];                    /* the user chord: bit n set = n semitones above its lowest note
                                            (bit 0 is the lowest note itself and reads as set) */
 } mk_chord_settings;
@@ -229,6 +237,23 @@ typedef struct {
 /* The notes a key plays in chord mode, low to high, each fitted to the scale, none twice, none
  * outside 0 to 127. Returns how many, 1 to MK_CHORD_NOTES. */
 int mk_chord_notes(const mk_chord_settings *chord, int note, int scale, int root, uint8_t out[MK_CHORD_NOTES]);
+#define MK_VOICING_ON 4
+
+/* Voicing On, as the stock firmware does it [0x0805CF14]: the notes of a chord are each moved an
+ * octave, or not, towards the range the chord before it sounded in, so a run of chords stays in
+ * one register. `raw` is the chord as built, in the order root then its intervals; that order is
+ * kept, which is also the order the strum walks. Call mk_voicing_process with on = 1 when the
+ * chord starts (it changes `notes` in place) and with on = 0, on the chord as built again, when
+ * its key is let go: that is when the range it sounded in is taken down for the next chord. */
+typedef struct { uint8_t en, lo, hi, last, plo, phi; } mk_voicing;
+void mk_voicing_set(mk_voicing *v, int on);             /* the Voicing setting was changed: start afresh */
+void mk_voicing_process(mk_voicing *v, int on, uint8_t *notes, int n);
+/* The chord as built for Voicing On: the key, then its preset's notes above it, none past 127,
+ * none twice, nothing fitted to a scale. Returns how many. */
+int mk_chord_raw(const mk_chord_settings *chord, int note, uint8_t out[MK_CHORD_NOTES]);
+/* Fit each note to the scale in place, dropping one that lands on an earlier one. Returns how many are left. */
+int mk_chord_fit(uint8_t *notes, int n, int scale, int root);
+
 /* Put `n` notes that are low to high into the order they are strummed in. */
 void mk_chord_order(uint8_t *notes, int n, int strum_type, uint32_t (*random)(void));
 /* Make these notes (any order, up to MK_CHORD_NOTES, within two octaves of the lowest) the user chord. */
@@ -278,7 +303,10 @@ typedef struct {
     uint8_t mod_source[2];              /* MK_MOD_ */
     uint8_t mod_volts[2];               /* 1 to 10: the top of the output */
     uint8_t bend_range;                 /* semitones the Bend strip moves the pitch output, 1 to 24 */
-    uint8_t reserved[7];
+    uint8_t vibrato;                    /* Wheel Vibrato: tenths of a semitone either way with the Mod strip at the
+                                           top, 0 to 120 */
+    uint8_t vibrato_rate;               /* tenths of a hertz, 3 to 100; 0 reads as 10 */
+    uint8_t reserved[5];
 } mk_cv_settings;
 
 typedef struct {

@@ -156,7 +156,7 @@ build-all:
 [group('qa')]
 test *args: build-all
     make -s -C sdk/examples/mk2000/tests
-    {{ uv }} run --with unicorn tools/emutest.py {{ args }}
+    {{ uv }} run --with unicorn --with littlefs-python tools/emutest.py {{ args }}
     {{ uv }} run --with unicorn tools/selftest_emu.py
 
 # Rebuild every stock header and compare

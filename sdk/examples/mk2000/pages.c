@@ -18,7 +18,8 @@ enum { T_CHANNEL, T_LENGTH, T_DIVISION, T_SWING, T_GATE, T_SPICE, T_DIRECTION, T
        TRACK_ENTRIES };
 enum { G_BRIGHTNESS, G_PATTERN_CHANGE, G_TEMPO, G_OVERDUB, G_REC_QUANTIZE, G_REC_AUTOM, G_KEYS, G_HOME_CHANNEL,
        G_AFTERTOUCH, G_SYNC, G_DIN_THRU, G_USB_THRU, G_CV, G_ABOUT, GLOBAL_ENTRIES };
-enum { V_FORMAT, V_REF, V_BEND, V_GATE, V_RETRIG, V_SOURCE_1, V_VOLTS_1, V_SOURCE_2, V_VOLTS_2, CV_ENTRIES };
+enum { V_FORMAT, V_REF, V_BEND, V_GATE, V_RETRIG, V_SOURCE_1, V_VOLTS_1, V_SOURCE_2, V_VOLTS_2, V_VIBRATO, V_VIBRATO_RATE,
+       CV_ENTRIES };
 enum { A_LENGTH, A_RETRIGGER, A_MODE, A_OCTAVES, A_DIVISION, A_GATE, A_SWING, ARP_ENTRIES };
 enum { C_PRESET, C_STRUM, C_STRUM_TYPE, C_VOICING, CHORD_ENTRIES };
 enum { S_GLOBAL, S_GLOBAL_ROOT, S_PATTERN, S_PATTERN_ROOT, SCALE_ENTRIES };
@@ -55,11 +56,11 @@ static const char *const pitch_refs[] = { "C-2", "C-1", "C0", "C1", "C2", "C3" }
 static const char *const gate_formats[] = { "S-trig", "V-trig 5V", "V-trig 12V" };
 static const char *const retrigs[MK_RETRIGS] = { "Mono", "Legato", "Legato Slide" };
 static const char *const mod_sources[MK_MOD_SOURCES] = { "Velocity", "Aftertouch", "ModWheel", "Random", "Pulse" };
-static const char *const voicings[] = { "Off", "Bass -1", "Bass -2", "Bass -3" };
+static const char *const voicings[] = { "Off", "On", "Bass -1", "Bass -2", "Bass -3" };     /* the stock order */
 /* The pattern's scale in the order the stock menu has it: Off, Global, then the scales. */
-static const char *const pattern_scales[MK_SCALE_COUNT + 1] = {
+static const char *const pattern_scales[MK_SCALE_COUNT + 2] = {
     "Off", "Global", "Major", "Minor", "Dorian", "Phrygian", "Lydian", "Mixolydian", "Locrian", "Harmonic Minor",
-    "Blues", "Pentatonic Major", "Pentatonic Minor", "Japanese", "Gypsy", "Arabic", "Freygish",
+    "Blues", "Pentatonic Major", "Pentatonic Minor", "Japanese", "Gypsy", "Arabic", "Freygish", "User",
 };
 
 /* Gate, probability and offset move in fives: a hundred detents would be too many to turn. The
@@ -116,6 +117,8 @@ static const entry cv_entries[CV_ENTRIES] = {
     { "Mod 1 Max Volt", 1, 10, 1, 0, " V", 0 },
     { "Mod 2 Source", 0, MK_MOD_SOURCES - 1, 1, mod_sources, 0, 0 },
     { "Mod 2 Max Volt", 1, 10, 1, 0, " V", 0 },
+    { "Wheel Vibrato", 0, 120, 5, 0, ". st", 0 },        /* a unit that starts with a point: the value is in tenths */
+    { "Vibrato Rate", 3, 100, 1, 0, ". Hz", 0 },
 };
 
 /* Arp Length and Arp Retrigger are the stock menu's two entries; the rest has no menu there. */
@@ -133,13 +136,13 @@ static const entry chord_entries[CHORD_ENTRIES] = {
     { "Preset", 0, MK_CHORD_COUNT - 1, 1, mk_chord_name, 0, 0 },
     { "Strum (ms)", 0, MK_STRUM_MAX, 2, 0, " ms", 0 },
     { "Strum Type", 0, MK_STRUM_COUNT - 1, 1, mk_strum_name, 0, 0 },
-    { "Voicing", 0, 3, 1, voicings, 0, 0 },
+    { "Voicing", 0, 4, 1, voicings, 0, 0 },
 };
 
 static const entry scale_entries[SCALE_ENTRIES] = {
     { "Global Scale", 0, MK_SCALE_COUNT - 1, 1, mk_scale_name, 0, 0 },
     { "Global Root", 0, 11, 1, mk_root_name, 0, 0 },
-    { "Pattern Scale", 0, MK_SCALE_COUNT, 1, pattern_scales, 0, 0 },
+    { "Pattern Scale", 0, MK_SCALE_COUNT + 1, 1, pattern_scales, 0, 0 },
     { "Pattern Root", 0, 11, 1, mk_root_name, 0, 0 },
 };
 
@@ -377,7 +380,7 @@ static int chord_get(int which) {
     case C_PRESET: return c->preset < MK_CHORD_COUNT ? c->preset : MK_CHORD_USER;
     case C_STRUM: return c->strum > MK_STRUM_MAX ? MK_STRUM_MAX : c->strum;
     case C_STRUM_TYPE: return c->strum_type < MK_STRUM_COUNT ? c->strum_type : MK_STRUM_UP;
-    default: return c->voicing > 3 ? 0 : c->voicing;
+    default: return c->voicing == MK_VOICING_ON ? 1 : c->voicing >= 1 && c->voicing <= 3 ? c->voicing + 1 : 0;
     }
 }
 
@@ -387,8 +390,9 @@ static void chord_set(int which, int value) {
     case C_PRESET: c->preset = (uint8_t)value; break;
     case C_STRUM: c->strum = (uint8_t)value; break;
     case C_STRUM_TYPE: c->strum_type = (uint8_t)value; break;
-    default: c->voicing = (uint8_t)value; break;
+    default: c->voicing = (uint8_t)(value == 1 ? MK_VOICING_ON : value >= 2 ? value - 1 : 0); break;
     }
+    if (which == C_PRESET || which == C_VOICING) ui_chord_changed(which == C_VOICING);
     app.settings_dirty = 1;
 }
 
@@ -399,7 +403,9 @@ static int scale_get(int which) {
     switch (which) {
     case S_GLOBAL: return app.settings.scale < MK_SCALE_COUNT ? app.settings.scale : MK_SCALE_OFF;
     case S_GLOBAL_ROOT: return app.settings.root % 12;
-    case S_PATTERN: return p->scale == MK_PATTERN_SCALE_GLOBAL ? 1 : p->scale < MK_SCALE_COUNT ? p->scale + 1 : 0;
+    case S_PATTERN:
+        if (p->scale == MK_PATTERN_SCALE_USER) return MK_SCALE_COUNT + 1;
+        return p->scale == MK_PATTERN_SCALE_GLOBAL ? 1 : p->scale < MK_SCALE_COUNT ? p->scale + 1 : 0;
     default: return p->root % 12;
     }
 }
@@ -409,7 +415,10 @@ static void scale_set(int which, int value) {
     switch (which) {
     case S_GLOBAL: app.settings.scale = (uint8_t)value; break;
     case S_GLOBAL_ROOT: app.settings.root = (uint8_t)value; break;
-    case S_PATTERN: p->scale = (uint8_t)(value == 0 ? MK_PATTERN_SCALE_OFF : value == 1 ? MK_PATTERN_SCALE_GLOBAL : value - 1); break;
+    case S_PATTERN:
+        p->scale = (uint8_t)(value == 0 ? MK_PATTERN_SCALE_OFF : value == 1 ? MK_PATTERN_SCALE_GLOBAL
+                             : value == MK_SCALE_COUNT + 1 ? MK_PATTERN_SCALE_USER : value - 1);
+        break;
     default: p->root = (uint8_t)value; break;
     }
     if (which == S_GLOBAL || which == S_GLOBAL_ROOT) app.settings_dirty = 1;
@@ -427,13 +436,16 @@ static uint8_t *cv_field(int which) {
     case V_SOURCE_1: return &c->mod_source[0];
     case V_VOLTS_1: return &c->mod_volts[0];
     case V_SOURCE_2: return &c->mod_source[1];
-    default: return &c->mod_volts[1];
+    case V_VOLTS_2: return &c->mod_volts[1];
+    case V_VIBRATO: return &c->vibrato;
+    default: return &c->vibrato_rate;
     }
 }
 
 static int cv_get(int which) {
     const entry *e = &cv_entries[which];
     int value = *cv_field(which);
+    if (which == V_VIBRATO_RATE && !value) value = 10;  /* settings from before it existed */
     return value < e->low ? e->low : value > e->high ? e->high : value;
 }
 
@@ -547,6 +559,21 @@ void pages_buttons(uint32_t buttons) { holding &= buttons; }
 
 int pages_holding(void) { return kind != PAGE_NONE && holding; }
 
+/* The pattern's user scale is being edited: Pattern Scale is open for editing and set to User. */
+static int user_scale_open(void) {
+    return kind == PAGE_SCALE && editing && shown == S_PATTERN && mk_engine_pattern()->scale == MK_PATTERN_SCALE_USER;
+}
+
+/* A key puts its note into the scale or takes it out, in any octave. The root stays in. */
+static void user_scale_toggle(int key) {
+    mk_pattern *p = mk_engine_pattern();
+    int degree = (53 + key + 120 - p->root % 12) % 12;  /* key 0 is an F */
+    if (!degree) return;
+    uint16_t notes = p->user_scale ? p->user_scale : 0xFFF;
+    p->user_scale = (uint16_t)((notes ^ 1u << degree) | 1);
+    app.dirty = 1;
+}
+
 /* The step list with Seq held: the numbered keys go to a step of the page of 16, the encoder moves
  * a page at a time, and the bank keys select the track as they do with Seq everywhere (ui.c).
  * Without Seq every key puts its note on the step, as inside a step. */
@@ -556,6 +583,10 @@ int pages_key(int key, uint8_t note, uint8_t velocity, int shift, int seq) {
     int numbered = key >= FIRST_NUMBERED && key < FIRST_EDIT;
     app.redraw = 1;
     switch (kind) {
+    case PAGE_SCALE:                                    /* the user scale, as on stock: the keys put notes in and out */
+        if (!user_scale_open()) return PAGE_KEY_PLAYS;
+        user_scale_toggle(key);
+        return PAGE_KEY_USED;
     case PAGE_CHAIN:
         if (shift && key == KEY_CLEAR) return pages_clear(), PAGE_KEY_USED;
         if (!numbered) return PAGE_KEY_PLAYS;
@@ -624,6 +655,10 @@ static char *value_text(char *at, const entry *e, int value) {
     if (e->words) return put(at, e->words[value - e->low]);
     if (!value && e->zero) return put(at, e->zero);
     if (e->low < 0 && value > 0) at = put(at, "+");
+    if (e->unit && e->unit[0] == '.') {                 /* tenths: 65 is 6.5 */
+        at = put_number(put(put_number(at, value / 10), "."), value % 10);
+        return put(at, e->unit + 1);
+    }
     at = put_number(at, value);
     return e->unit ? put(at, e->unit) : at;
 }
@@ -730,13 +765,31 @@ static void menu_screen(const char *title, const menu *m) {
     text(SMALL, 0, LOW, line);
 }
 
+/* Editing the user scale: the twelve notes from the root, a filled cell for each one in it. */
+static void user_scale_screen(void) {
+    const mk_pattern *p = mk_engine_pattern();
+    uint16_t notes = p->user_scale ? p->user_scale : 0xFFF;
+    text(SMALL, 0, TOP, "User Scale");
+    right(SMALL, TOP, "keys: in, out");
+    text(LARGE, 0, MID, "User");
+    for (int degree = 0; degree < 12; degree++) {
+        int x = 4 + degree * 10;
+        ks_oled_rect(x, 23, 8, 8, 1);
+        if (!(notes >> degree & 1)) ks_oled_rect(x + 1, 24, 6, 6, 0);
+    }
+    char line[12];
+    put(put(line, "Root "), mk_root_name[p->root % 12]);
+    right(LARGE, MID, line);
+}
+
 static void about_screen(void) {
     char line[32];
     text(SMALL, 0, TOP, "About");
     right(SMALL, TOP, ks_version);
     text(LARGE, (KS_OLED_W - ks_font_width(LARGE, "KeyStep MK2000")) / 2, MID, "KeyStep MK2000");
-    put(put_number(put(line, "Free: "), mk_store_free_sectors()), " of 31 sectors");
+    put(put_number(put(line, "Free "), mk_store_free_sectors()), "/31");      /* sectors of the SDK's flash area */
     text(SMALL, 0, LOW, line);
+    right(SMALL, LOW, cv_calibrated() == 7 ? "CV: calibrated" : cv_calibrated() ? "CV: partly" : "CV: no calib");
 }
 
 /* The chain in the small font, whose 1 reads as a 1. When it is too long, the end is shown. */
@@ -782,7 +835,8 @@ int pages_draw(void) {
         menu_screen("Chord", &chord_menu);
         return 1;
     case PAGE_SCALE:
-        menu_screen("Scale", &scale_menu);
+        if (user_scale_open()) user_scale_screen();
+        else menu_screen("Scale", &scale_menu);
         return 1;
     case PAGE_CV:
         menu_screen("CV Settings", &cv_menu);

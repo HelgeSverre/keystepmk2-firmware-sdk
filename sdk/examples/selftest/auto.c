@@ -194,11 +194,13 @@ static void check_sync(void) {
 }
 
 /* ---- analog inputs with nothing pressed: the levels of a real unit are what we want to know,
- * so this measures and judges nothing but a value the converter cannot give ---- */
+ * so this measures, and fails only a value the converter cannot give or a converter that has
+ * stopped (the driver counts its conversions: each input gets one about every 4 ms) ---- */
 
 static void check_rest(int id, int (*read)(void), int32_t *mean, int32_t *spread) {
     enum { SAMPLES = 250 };
     int32_t low = 0x7FFFFFFF, high = -1, sum = 0;
+    uint32_t before = ks_analog_count();
     for (int i = 0; i < SAMPLES; i++) {
         ks_delay_ms(4);                             /* the driver's refresh time */
         int32_t value = read();
@@ -208,21 +210,24 @@ static void check_rest(int id, int (*read)(void), int32_t *mean, int32_t *spread
     }
     *mean = sum / SAMPLES;
     if (spread) *spread = high - low;
-    int possible = low >= 0 && high <= 4095;
-    RESULT(id, possible ? INFO : FAIL, possible ? "" : "outside 0 to 4095", low, high, *mean, SAMPLES);
+    int32_t converted = (int32_t)(ks_analog_count() - before);
+    int possible = low >= 0 && high <= 4095, running = converted >= SAMPLES / 4;
+    RESULT(id, possible && running ? INFO : FAIL, !running ? "the converter is not running" : possible ? "" : "outside 0 to 4095",
+           low, high, *mean, SAMPLES, converted);
 }
 
-/* ---- touch strips with no finger. This catches a phantom touch; that the controller answers
- * at all is only shown by the guided strip checks. ---- */
+/* ---- touch strips with no finger: the controller must answer on its bus, and neither strip
+ * may read a finger ---- */
 
 static void check_touch_rest(void) {
-    int32_t mod = -1, bend = -1, touched = 0;
+    int32_t mod = -1, bend = -1, touched = 0, present = ks_touch_present();
     for (uint32_t start = ks_millis(); ks_millis() - start < 500;) {
         mod = ks_touch(KS_STRIP_MOD);
         bend = ks_touch(KS_STRIP_BEND);
         if (mod >= 0 || bend >= 0) touched = 1;
     }
-    RESULT(C_TOUCH_REST, touched ? FAIL : OK, touched ? "a strip reads a finger" : "", mod, bend);
+    RESULT(C_TOUCH_REST, touched || !present ? FAIL : OK,
+           !present ? "no touch controller answers" : touched ? "a strip reads a finger" : "", mod, bend, present);
 }
 
 void run_automatic(void) {

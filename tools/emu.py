@@ -22,6 +22,7 @@ import struct
 import sys
 from collections import Counter
 from pathlib import Path
+from types import MappingProxyType
 
 import fwpack
 import usbmodel
@@ -158,6 +159,8 @@ class I2c:
         self.written = bytearray()  # bytes written since the last stop: the register address for a read
         self.log: list[tuple[int, bool, bytes, int]] = []
         self.device = None  # callable(addr, bytes written before the read, index) -> byte
+        self.present = lambda _addr: True  # does a device answer at this address? If not: no acknowledge
+        self.nack = False
         self.clock = clock
 
     def control(self, cr2: int) -> None:
@@ -166,6 +169,7 @@ class I2c:
             self.finish()
             self.addr, self.reading = cr2 >> 1 & 0x7F, bool(cr2 & 1 << 10)
             self.data = bytearray()
+            self.nack = not self.present(self.addr)
         self.left = cr2 >> 16 & 0xFF
         self.autoend, self.reload = bool(cr2 & 1 << 25), bool(cr2 & 1 << 24)
         self.done = self.stopf = False
@@ -198,6 +202,8 @@ class I2c:
 
     def status(self) -> int:
         v = 0x01  # TXE
+        if self.nack:
+            return v | 0x10  # NACKF: nothing answered the address
         if self.left:
             v |= 0x04 if self.reading else 0x02  # RXNE or TXIS
         elif self.stopf:
@@ -228,7 +234,12 @@ class I2c:
 
 
 class NorFlash:
-    """The 512 KiB SPI flash on SPI2 (chip select PA8). Answers as a GD25Q40: id C8 40 13."""
+    """The 512 KiB SPI flash on SPI2 (chip select PA8). Answers as a GD25Q40: id C8 40 13.
+
+    A page program keeps it busy for 0.7 ms and an erase for 45 ms (4 KiB), 150 ms (32 KiB) or
+    250 ms (64 KiB), about what the part's data sheet gives as typical, on `clock` (microseconds)."""
+
+    BUSY_US = MappingProxyType({0x02: 700, 0x20: 45_000, 0x52: 150_000, 0xD8: 250_000})
 
     SIZE = 0x80000
     JEDEC = (0xC8, 0x40, 0x13)
@@ -238,14 +249,15 @@ class NorFlash:
         self.cmd: list[int] = []
         self.addr = 0
         self.writable = False
-        self.busy = 0  # status reads that still report busy
+        self.clock = lambda: 0.0  # the board's time, set by Board
+        self.busy_until = 0.0
         self.dirty = False
         self.stats: Counter[str] = Counter()
 
     def deselect(self) -> None:
         if self.cmd and self.cmd[0] == 0x02:
             self.writable = False
-            self.busy = 2
+            self.busy_until = self.clock() + self.BUSY_US[0x02]
         self.cmd = []
 
     def transfer(self, b: int) -> int:
@@ -257,8 +269,7 @@ class NorFlash:
         if op == 0x05:
             if n == 1:
                 return 0xFF
-            busy, self.busy = self.busy > 0, max(0, self.busy - 1)
-            return (0x02 if self.writable else 0x00) | busy
+            return (0x02 if self.writable else 0x00) | (self.clock() < self.busy_until)
         if op == 0x06:
             self.writable = True
         elif op == 0x04:
@@ -272,7 +283,7 @@ class NorFlash:
                     self.mem[start : start + size] = b"\xff" * size
                     self.stats["erase"] += 1
                     self.writable, self.dirty = False, True
-                    self.busy = 3
+                    self.busy_until = self.clock() + self.BUSY_US[op]
             elif n > 4 + (op == 0x0B):
                 if op == 0x02:
                     if self.writable:
@@ -432,10 +443,13 @@ class Board:
         # the board
         self.oled = Ssd1306()
         self.flash = NorFlash(flash)
+        self.flash.clock = lambda: self.us
         self.spi[SPI2].device = self.flash.transfer
         self.spi[SPI3].source = self.button_byte  # the stock firmware only receives
         self.spi[SPI3].device = lambda _byte: self.button_byte()  # the SDK clocks the bytes in by sending
         self.i2c[I2C1].device = self.touch_read
+        self.touch_present = True  # False: the touch controller does not answer, as with a broken flex cable
+        self.i2c[I2C1].present = lambda _addr: self.touch_present
         self.leds = [[(0, 0, 0)] * n for n in LED_CHAINS]
         self.led_updates = 0
         self.midi_out = bytearray()  # bytes sent on the DIN output
@@ -932,6 +946,11 @@ class Board:
                 if number < 16 or self.nvic_enabled >> (number - 16) & 1:
                     self.enter_exception(number)
             count = max(1, min(SLICE_INSNS, int((nxt - self.us) * self.ipu)))
+            if self.pending and not self.in_handler:
+                # An interrupt is waiting behind PRIMASK. On the chip it is taken the instant the
+                # mask goes; a whole slice here would let code that masks again straight away (a
+                # loop on a guarded counter) hold it off for good. So look again very soon.
+                count = min(count, 12)
             try:
                 uc.emu_start(self.pc | 1, 0xFFFFFFF0, count=count)
             except UcError as e:

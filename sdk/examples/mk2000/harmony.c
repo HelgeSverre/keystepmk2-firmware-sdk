@@ -55,11 +55,19 @@ static const uint32_t chords[MK_CHORD_COUNT] = {
     S(0) | S(3) | S(7) | S(10) | S(14) | S(17),
 };
 
+static uint32_t shape_of(const mk_chord_settings *chord);
+
 static int in_scale(int note, uint16_t scale, int root) { return scale >> ((note - root + 120) % 12) & 1; }
 
+/* The notes of a scale, or of a user scale with its root put in; 0 for no scale. */
+static uint16_t notes_of(int scale) {
+    if (scale & 0x1000) return (uint16_t)((scale & 0xFFF) | 1);
+    return scale > MK_SCALE_OFF && scale < MK_SCALE_COUNT ? scales[scale] : 0;
+}
+
 int mk_scale_fit(int note, int scale, int root) {
-    if (scale <= MK_SCALE_OFF || scale >= MK_SCALE_COUNT || note < 0 || note > 127) return note;
-    uint16_t notes = scales[scale];
+    uint16_t notes = scale < 0 ? 0 : notes_of(scale);
+    if (!notes || note < 0 || note > 127) return note;
     root = (root % 12 + 12) % 12;
     for (int away = 0; away < 12; away++) {            /* the lower one first */
         if (note - away >= 0 && in_scale(note - away, notes, root)) return note - away;
@@ -81,15 +89,89 @@ static int add(uint8_t *out, int n, int note) {
 }
 
 int mk_chord_notes(const mk_chord_settings *chord, int note, int scale, int root, uint8_t out[MK_CHORD_NOTES]) {
-    uint32_t shape = chord->preset == MK_CHORD_USER || chord->preset >= MK_CHORD_COUNT
-                         ? (uint32_t)chord->user[0] | (uint32_t)chord->user[1] << 8 | (uint32_t)chord->user[2] << 16
-                         : chords[chord->preset];
+    uint32_t shape = shape_of(chord);
     int n = add(out, 0, mk_scale_fit(note, scale, root));
     if (chord->voicing >= 1 && chord->voicing <= 3) n = add(out, n, mk_scale_fit(note - 12 * chord->voicing, scale, root));
     for (int i = 1; i < 24; i++)
         if (shape >> i & 1) n = add(out, n, mk_scale_fit(note + i, scale, root));
     if (!n) out[n++] = (uint8_t)(note < 0 ? 0 : note > 127 ? 127 : note);
     return n;
+}
+
+static uint32_t shape_of(const mk_chord_settings *chord) {
+    return chord->preset == MK_CHORD_USER || chord->preset >= MK_CHORD_COUNT
+               ? (uint32_t)chord->user[0] | (uint32_t)chord->user[1] << 8 | (uint32_t)chord->user[2] << 16
+               : chords[chord->preset];
+}
+
+int mk_chord_raw(const mk_chord_settings *chord, int note, uint8_t out[MK_CHORD_NOTES]) {
+    uint32_t shape = shape_of(chord);
+    int n = 0;
+    if (note < 0 || note > 127) return 0;
+    out[n++] = (uint8_t)note;
+    for (int i = 1; i < 24 && n < MK_CHORD_NOTES; i++)
+        if (shape >> i & 1 && note + i <= 127) out[n++] = (uint8_t)(note + i);
+    return n;
+}
+
+int mk_chord_fit(uint8_t *notes, int n, int scale, int root) {
+    int kept = 0;
+    for (int i = 0; i < n; i++) {
+        int fitted = mk_scale_fit(notes[i], scale, root), twice = 0;
+        for (int j = 0; j < kept; j++) twice |= notes[j] == fitted;
+        if (!twice) notes[kept++] = (uint8_t)fitted;
+    }
+    return kept;
+}
+
+void mk_voicing_set(mk_voicing *v, int on) {
+    v->en = on != 0;
+    v->lo = v->hi = 0x80;                               /* no window yet: the next chord only starts one */
+}
+
+static int distance(int a, int b) { return a < b ? b - a : a - b; }
+
+void mk_voicing_process(mk_voicing *v, int on, uint8_t *notes, int n) {
+    if (!v->en) return;
+    if (v->lo > 0x7F) {                                 /* the first event after the setting changed */
+        v->lo = v->plo = v->last = 0x7F;
+        v->hi = v->phi = 0;
+        return;
+    }
+    int lowest = 0x7F, highest = 0;                     /* of the chord as built */
+    for (int i = 0; i < n; i++) {
+        if (notes[i] < lowest) lowest = notes[i];
+        if (notes[i] > highest) highest = notes[i];
+    }
+    if (on && v->last != lowest) {                      /* another root: the range last taken down is the window now */
+        v->lo = v->plo;
+        v->hi = v->phi;
+    }
+    int top = 0, bottom = 0x7F;                         /* of the chord as it sounds */
+    if ((lowest <= v->hi && v->hi <= highest) || (lowest <= v->lo && v->lo <= highest)) {      /* an edge of the window is inside the chord */
+        for (int i = 0; i < n; i++) {
+            int p = notes[i], q = p, move = 0;
+            if (p < v->lo) {                            /* an octave up, if that is in the window or nearer to it */
+                q = p + 12;
+                move = (q >= v->lo && q <= v->hi) || distance(q, v->lo) < v->lo - p || distance(q, v->hi) < v->lo - p;
+            } else if (p > v->hi) {
+                q = p - 12;
+                move = (q >= v->lo && q <= v->hi) || distance(q, v->hi) < p - v->hi || distance(q, v->lo) < p - v->hi;
+            }
+            if (move && q >= 0 && q <= 127) p = q;
+            int twice = 0;
+            for (int j = 0; j < i; j++) twice |= notes[j] == p;
+            if (twice) continue;                        /* it would land on an earlier note: it stays where it was */
+            notes[i] = (uint8_t)p;
+            if (p > top) top = p;
+            else if (p < bottom) bottom = p;            /* as stock: a new highest note is not also taken as the lowest */
+        }
+    }
+    if (!on && v->last != lowest) {                     /* let go: what it sounded as waits for the next root */
+        v->last = (uint8_t)lowest;
+        v->plo = (uint8_t)(bottom == 0x7F ? lowest : bottom);
+        v->phi = (uint8_t)(top == 0 ? highest : top);
+    }
 }
 
 static void reverse(uint8_t *notes, int n) {

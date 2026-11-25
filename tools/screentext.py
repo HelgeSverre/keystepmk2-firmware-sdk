@@ -46,6 +46,20 @@ class Reader:
         widths = next({c: w for c, w, *_rest in g} for h, g, _u in self.fonts if h == height)
         return sum(widths[c] for c in text)
 
+    @staticmethod
+    def settle(height: int, text: str) -> str:
+        """The small font draws 0 and O alike. Word by word: a zero in a word with other digits, or
+        with no letters, stays a zero; in a word of letters it is an O ("OK", "Oct", "Overdub")."""
+        if height >= 12:
+            return text
+        words = []
+        for word in text.split(" "):
+            rest = word.replace("0", "").replace("O", "")
+            letters = any(c.isalpha() for c in rest)
+            digits = any(c.isdigit() for c in rest)
+            words.append(word.replace("0", "O") if letters and not digits else word.replace("O", "0"))
+        return " ".join(words)
+
     def read_lines(self, board) -> list[tuple[int, int, int, str]]:
         """(y, x, font height, text) for each run of text, top to bottom."""
         rows = [sum(board.oled.pixel(x, y) << (WIDTH - 1 - x) for x in range(WIDTH)) for y in range(HEIGHT)]
@@ -74,6 +88,7 @@ class Reader:
                         at = best[at][2]
                     if sum(c != " " for c in run) >= 2 and best[x][0] >= 12:
                         found.append((best[x][0], y, x, height, run.strip()))
+        found = [(ink, y, x, height, self.settle(height, text)) for ink, y, x, height, text in found]
         taken: list[tuple[int, int, int, int]] = []
         lines = []
         for _ink, y, x, height, text in sorted(found, reverse=True):  # the reading with most ink wins an area

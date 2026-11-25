@@ -258,15 +258,18 @@ class Host:
         """MIDI bytes as 4-byte USB-MIDI packets (cable 0)."""
         packets = bytearray()
         i = 0
+        in_sysex = False
         while i < len(data):
             status = data[i]
-            if status == 0xF0 or (packets and packets[-4] & 0xF == 4 and status < 0x80):  # SysEx
+            if status == 0xF0 or (in_sysex and (status < 0x80 or status == 0xF7)):  # SysEx, its end included
                 chunk = data[i : i + 3]
                 if 0xF7 in chunk:
                     chunk = chunk[: chunk.index(0xF7) + 1]
-                    code = 4 + len(chunk)
+                    code = 4 + len(chunk)  # 5, 6 or 7: the message ends with one, two or three bytes
+                    in_sysex = False
                 else:
                     code = 4
+                    in_sysex = True
                 i += len(chunk)
             elif status >= 0xF8:
                 chunk, code, i = data[i : i + 1], 0xF, i + 1

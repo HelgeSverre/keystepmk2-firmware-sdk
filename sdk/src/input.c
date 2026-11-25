@@ -167,6 +167,13 @@ int ks_touch(int index) {
     return strip[index & 1];
 }
 
+/* The stock firmware reads the controller's register 4 at start-up; asking for the same register
+ * is answered by a controller that is there and not acknowledged by a bus with nothing on it. */
+int ks_touch_present(void) {
+    uint8_t reg = 4, value;
+    return i2c_write(&reg, 1) && i2c_read(&value, 1);
+}
+
 void input_init(void) {
     pin_out(GPIOB, 4, 0);                           /* buttons */
     pin_af(GPIOC, 10, 4, 0);

@@ -124,8 +124,7 @@ chord mode.
   Down `G Eb C`.
 - `Voicing`: Off, On, Bass -1, Bass -2, Bass -3. Bass -1 adds the root an octave below the chord,
   Bass -3 three octaves below. With On, `min` on C, F, G, D, C5 played in that order came out as
-  `60 63 67`, `65 68 60`, `67 70 62`, `62 65 69`, `72 75 79`: some top notes an octave down. The
-  rule was not worked out.
+  `60 63 67`, `65 68 60`, `67 70 62`, `62 65 69`, `72 75 79`: see "Voicing On" below.
 - User chord: with Chord held, play keys (`User Chord   3 notes`), let go (`User Chord
   Recorded`). C Eb G recorded, then the D key plays D F A.
 - In a scale every note of the chord is fitted: `min` on C in C major plays `C D G`.
@@ -255,4 +254,49 @@ step), default settings.
 - Also seen: Shift + Tempo shows `Seq Length`; the Shift + edit keys show `Time Div:`, `Nudge`,
   `Transpose`, `Pattern Doubled`, `Pattern Quantized`, `Pattern Reloaded`, `Pattern Cleared`,
   `Pattern Undo`.
+
+## The user scale
+
+Stock 1.0.2 in the emulator. In the Scale menu, `Pattern Scale` edited and turned to `User   (Keys
+to edit)`: the display becomes a drawing of twelve keys, and a key pressed changes the drawing.
+With C4, D4 and E4 pressed there, the keys C4 to B4 afterwards play `60 61 61 63 63 65 66 67 68 69
+70 71`: D and E have gone out of the scale and play the note below, C has stayed. So the user
+scale starts with all twelve notes, a key takes its note out or puts it back, and C (the root at
+its default) stays in. Pressing C4 again changed nothing.
+
+## Vibrato
+
+Stock 1.0.2 in the emulator, settings written over USB (ids 16393 `Wheel Vibrato` and 16394
+`Vibrato Rate`, values scaled to `0x7FFF` over their range), a key held, pitch output sampled
+every 10 ms.
+
+- With Wheel Vibrato above 0 and the Mod strip up, the pitch output swings around the note. At
+  the top of the strip: 13090 counts peak to peak with the setting at its top (12 semitones
+  either way), 6464 at half. With the strip half way the swing halves; at the bottom there is
+  none.
+- Vibrato Rate: one swing a second at its default, every 196 ms at half of its range, every
+  100 ms at the top. So the setting's 3 to 100 is 0.3 to 10.0 Hz, and Wheel Vibrato's 0 to 120 is
+  0 to 12.0 semitones.
+- Nothing is sent in MIDI for it: no pitch bend. Mod 2 still follows the strip.
+
+## Voicing On
+
+Read from the code [`0x0805CF14`; state reset `0x0805D1D8`, called from the chord parameter
+setter `0x0802DA18`] and checked against 24 chords played in the emulator, which a model of the
+rule reproduces note for note (`sdk/examples/mk2000/tests/harmony_test.c` holds them).
+
+- The firmware keeps a **window**: the lowest and highest note of the previous chord as it
+  sounded. It is taken down when that chord's key is let go, and becomes the window in force at
+  the next note-on whose lowest note differs from that chord's.
+- A new chord is left alone unless an edge of the window lies within its own range. If one does,
+  each note is considered on its own: a note below the window may go up an octave, one above it
+  down an octave, and it does so if that puts it inside the window or nearer to either edge than
+  it was. A note that would land on an earlier note of the chord stays where it was.
+- The notes keep their order: the key, then the preset's intervals from low to high. The strum
+  walks that order, not pitch order, so a voiced chord is strummed in an order of its own.
+- Changing Voicing starts with no window. Changing the preset from the menu sends an empty
+  release, which also empties the window. Switching chord mode off and on does not.
+- Voicing On and the Bass values exclude each other.
+- After voicing, in this order, come Spread (extra copies of the notes an octave up, or a cut, to
+  reach a number of notes; no entry in the 32-key unit's menu), strum, and the scale last.
 

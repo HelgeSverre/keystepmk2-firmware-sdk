@@ -400,6 +400,24 @@ Calibration file `calib/expr_pdl`.
     1.0.4 (V in emulation). 1.0.3 was not run through it.
   - Flashing a firmware does not touch this chip: the external flash read on a unit after
     several updates still held its patterns and settings.
+- **Calibration files** (read from one unit's chip, 2026-11-25): `calib/pitch`, `calib/mod1` and
+  `calib/mod2` are 16 bytes each, four little-endian 32-bit numbers `0, low, 65535, high`; on that
+  unit `-20, 65553`, `-41, 66008` and `-53, 65805`. The stock firmware puts out `low + value ×
+  (high − low) / 65535` for a 16-bit value: run in the emulator on that chip image it gives 9269,
+  13093, 19651 and 26209 on the pitch output where a blank chip gives 9284, 13106, 19660 and 26214,
+  and 1549 on Mod 2 where a blank chip gives 1545 (the DAC's 12 bits are the top of the 16) (V in
+  emulation). The same file system holds `boot_count` (4 bytes), `desc/asn` (the serial number as
+  text), `desc/unlock` (8 characters) and `self_test_file`.
+- **Reading the file system without littlefs**: the small files sit inside their directory's
+  block. A directory is a pair of blocks, the one with the later revision number (the first four
+  bytes) current. After that come tags, each a big-endian word XORed with the tag before it
+  (the first with `0xFFFFFFFF`): a valid bit (0), 11 bits of type, 10 of id, 10 of length (`0x3FF`
+  = none), then the data. Types seen: `0x001`/`0x002` name of a file or directory, `0x200` a
+  directory's pair of blocks, `0x201` a file's bytes, `0x401` create (the ids from its own upward
+  move up one), `0x4FF` delete (they move back), `0x5FF` a forward CRC, `0x500`/`0x501` a
+  commit's CRC (after it the previous-tag value has its top bit flipped by the type's low bit).
+  The root is the pair of blocks 0 and 1. `sdk/examples/mk2000/calib.c` reads the three
+  calibration files this way; its result on the unit's chip image matches littlefs's own.
 - **Settings block** (V in emulation: written after SysEx operation `19 92`, then compared with
   the values the read operation `2A 89` returns). 104 bytes:
 

@@ -75,6 +75,7 @@ warnings.
 | `ks_aftertouch()`, `ks_pedal()` | the two analog inputs, 0 to 4095 |
 | `ks_store_save(slot, data, len)`, `ks_store_load(slot, data, max)` | 31 numbered records of up to 4088 bytes in the external flash, with a checksum |
 | `ks_flash_id()`, `ks_flash_read()`, `ks_flash_erase()`, `ks_flash_write()` | the external flash directly; erase and write only work in the SDK's area (below) |
+| `ks_touch_present()`, `ks_analog_count()` | whether the touch controller answers on its bus; how many analog conversions have finished (it stands still if the converter does) |
 | `ks_reset()`, `ks_enter_update_mode()` | system reset; the update-mode request (used on a unit by `ksflash.py`'s `0xF2`) |
 
 ## Fonts

@@ -1,6 +1,8 @@
 /* KeyStep mk2 SDK: the board, as far as it is mapped (docs/HARDWARE.md).
  *
- * Everything here has run in tools/emu.py only. Nothing has been flashed to a device yet. */
+ * Written against tools/emu.py. Firmware built on it has run on a unit (docs/FLASHING.md); which
+ * drivers have been shown to work there is in sdk/README.md, and sdk/examples/selftest checks the
+ * rest. */
 #ifndef KEYSTEP_H
 #define KEYSTEP_H
 #include <stdint.h>
@@ -11,14 +13,14 @@ void ks_init(void);
 /* ---- time ---- */
 uint32_t ks_millis(void);
 void ks_delay_ms(uint32_t ms);
-uint16_t ks_micros16(void);
+uint16_t ks_micros16(void);             /* a free-running microsecond counter, wraps every 65 ms */
 uint32_t ks_micros(void);               /* microseconds since start, wraps every 71 minutes */
 /* One periodic interrupt for your own use, 50 to 65536 us: a sequencer clock, for example. The
  * callback runs in the interrupt, so keep it short. A new period applies from the next one;
  * ks_timer_start again (an interrupt may call it) starts the count over from now. */
 void ks_timer_start(uint32_t period_us, void (*callback)(void));
 void ks_timer_period(uint32_t period_us);
-void ks_timer_stop(void);             /* a free-running microsecond counter, wraps every 65 ms */
+void ks_timer_stop(void);
 
 /* ---- display: 128 x 32, one bit per pixel. Draw, then ks_oled_flush(). ---- */
 #define KS_OLED_W 128
@@ -64,6 +66,9 @@ uint32_t ks_keys_down(void);            /* bit n set while key n is held */
 #define KS_STRIP_MOD 0
 #define KS_STRIP_BEND 1
 int ks_touch(int strip);
+/* 1 if the touch controller answers on its bus. ks_touch gives -1 both for no finger and for a
+ * controller that is not there; this tells them apart. Takes under a millisecond. */
+int ks_touch_present(void);
 
 /* ---- LEDs: set colours as 0xRRGGBB, then ks_leds_show(). The stock firmware never drives a
  * channel above 0x8D. The 32-key model has the thirteen button lights only. ---- */
@@ -95,6 +100,7 @@ void ks_sync_clock_in(void);
 /* ---- analog inputs, 0 to 4095, refreshed every 4 ms ---- */
 int ks_aftertouch(void);                /* pressure on the keybed's strip */
 int ks_pedal(void);                     /* the pedal socket */
+uint32_t ks_analog_count(void);         /* conversions finished since start: it stands still if the converter does */
 
 /* ---- MIDI on the DIN sockets ---- */
 void ks_midi_send(uint8_t status, uint8_t d1, uint8_t d2);         /* a three-byte message */

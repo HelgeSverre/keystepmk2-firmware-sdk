@@ -72,6 +72,7 @@ int ks_sync_pulses(void) {
  * (PA1), converted in turn from the 1 ms tick ---- */
 
 static volatile uint16_t analog[2];
+static volatile uint32_t conversions;
 static uint8_t channel, converting;
 
 void analog_tick_1ms(void) {
@@ -79,6 +80,7 @@ void analog_tick_1ms(void) {
     if (converting) {
         if (!(isr & 4)) return;                         /* not finished */
         analog[channel] = (uint16_t)ADC_DR;
+        conversions++;
         converting = 0;
         channel ^= 1;
         ADC_ISR = 1u << 13;
@@ -91,6 +93,7 @@ void analog_tick_1ms(void) {
 
 int ks_pedal(void) { return analog[0]; }
 int ks_aftertouch(void) { return analog[1]; }
+uint32_t ks_analog_count(void) { return conversions; }
 
 void cv_init(void) {
     RCC_APBENR1 |= 1u << 29;                            /* DAC1 */

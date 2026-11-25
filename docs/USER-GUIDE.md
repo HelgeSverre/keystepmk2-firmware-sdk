@@ -232,7 +232,9 @@ Retrigger (off lets it run on), Mode, Octaves, Time Division, Gate, Swing.
 Presets: User, Oct, 5th, Maj, min, sus2, sus4, Maj7, min7, Maj9, min9, Maj11, min11.
 
 **Chord page:** Preset, Strum (0–80 ms from one note to the next), Strum Type (Up, Alt Up, Down,
-Alt Down, Random) and Voicing (Bass −1, −2 or −3 adds the root that many octaves down).
+Alt Down, Random) and Voicing. Voicing `On` keeps a run of chords in one register: notes of each
+new chord move an octave towards where the last chord sounded. `Bass −1`, `−2` or `−3` adds the
+root that many octaves down.
 
 Chords are recorded whole, and with the arp on, the arp runs over the chord of each key.
 
@@ -245,8 +247,12 @@ chords, the arp and recording.
 | Setting | What it is |
 |---|---|
 | Global Scale, Global Root | Used by every pattern that does not have its own |
-| Pattern Scale | `Global`, a scale of its own, or `Off`. Saved with the pattern |
+| Pattern Scale | `Global`, a scale of its own, `User`, or `Off`. Saved with the pattern |
 | Pattern Root | The root of the pattern's own scale |
+
+**User** is a scale you make. Open Pattern Scale for editing, turn to `User`, and press keys: each
+key puts its note in or takes it out, in any octave. The display shows the twelve notes from the
+root as cells, filled when they are in. The root always is.
 
 Scales: Major, Minor, Dorian, Phrygian, Lydian, Mixolydian, Locrian, Harmonic Minor, Blues,
 Pentatonic Major, Pentatonic Minor, Japanese, Gypsy, Arabic, Freygish.
@@ -293,9 +299,11 @@ pitch and gate outputs. Global settings → **CV Settings**:
 | Gate Retrig | Mono, Legato, Legato Slide |
 | Mod 1 Source, Mod 2 Source | Velocity, Aftertouch, ModWheel, Random, Pulse |
 | Mod 1 Max Volt, Mod 2 Max Volt | 1–10 V |
+| Wheel Vibrato | 0–12 semitones: how far the Mod strip wobbles the pitch output. CV only |
+| Vibrato Rate | 0.3–10 Hz |
 
-The outputs use the same numbers as Arturia's firmware without a unit's calibration, so pitch
-may be slightly off until calibration is supported.
+The outputs use your unit's factory calibration, read from where Arturia's firmware keeps it.
+About (in global settings) says `CV: calibrated` when it was found.
 
 ## Global settings
 
@@ -381,8 +389,3 @@ MK2000 keeps its patterns in a part of the unit's memory that Arturia's firmware
 never touches Arturia's patterns, settings or calibration. You can switch between the two
 firmwares as often as you like: each finds its own patterns as it left them. Roughly 16 to 30
 MK2000 patterns fit, depending on how full they are; About shows the free memory.
-
-## Not there yet
-
-- The User scale and the chord Voicing `On`
-- CV calibration, vibrato

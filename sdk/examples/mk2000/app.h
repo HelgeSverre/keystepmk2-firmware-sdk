@@ -47,7 +47,7 @@ void app_unlock(uint32_t state);
 void app_note(uint8_t channel, uint8_t note, uint8_t velocity);     /* velocity 0 = off */
 void app_send(const uint8_t *bytes, int n);     /* a whole MIDI message, to DIN and USB */
 uint8_t app_keys_channel(void);                 /* where the keys go right now */
-int app_scale(int *root);                       /* the scale in force (MK_SCALE_, the pattern's or the global one) and its root */
+int app_scale(int *root);                       /* the scale in force (a MK_SCALE_ or MK_SCALE_USER(notes)) and its root */
 uint32_t app_random(void);
 void app_message(const char *text);
 void app_select_slot(int slot);                 /* by hand: load it, hand it to the engine, chain off */
@@ -66,12 +66,18 @@ int app_mutated(void);                          /* 1 while the selected track is
 uint32_t app_beat_phase(void);                  /* ticks into the current quarter note, 0 to 95 */
 int app_external_tempo(void);                   /* tenths of a BPM of the clock followed; 0 not heard, -1 own clock */
 
+/* calib.c: the unit's own calibration of the three CV outputs, from the stock file system */
+typedef struct { int32_t low[3], high[3]; } app_calibration;      /* pitch, mod 1, mod 2: what 0 and 65535 become */
+int calib_read(app_calibration *out);           /* a bit per output found; the others are left as 0 and 65535 */
+int32_t calib_apply(const app_calibration *c, int which, int32_t value);        /* a 16-bit value, corrected */
+
 /* cv.c: what plays on track 1's channel also plays on the CV outputs */
 void cv_note(uint8_t note, uint8_t velocity);   /* velocity 0 = off */
 void cv_stop(void);                             /* gate down, whatever is held */
 void cv_source(int source, int value);          /* MK_MOD_AFTERTOUCH or MK_MOD_WHEEL moved: 0 to 127 */
 void cv_bend(int bend14);
 void cv_apply(void);                            /* after a change to app.settings.cv */
+int cv_calibrated(void);                        /* a bit per output with a calibration: pitch, mod 1, mod 2 */
 void cv_poll(uint32_t now);
 
 /* controls.c */
@@ -80,6 +86,7 @@ const char *controls_text(void);                /* "Gate 45 %" while Shift + a s
 
 /* ui.c */
 void ui_poll(void);
+void ui_chord_changed(int voicing_too);          /* after a change to app.settings.chord, and once at start-up */
 void ui_quantize(int percent);                  /* the selected track: 100, or 50 for half way */
 
 /* pages.c: the pages that stay open until Back. While the buttons that opened one are still

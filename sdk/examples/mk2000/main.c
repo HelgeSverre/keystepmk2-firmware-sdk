@@ -83,6 +83,7 @@ int app_scale(int *root) {
     int own = p->scale != MK_PATTERN_SCALE_GLOBAL;
     int scale = own ? p->scale : app.settings.scale;
     *root = (own ? p->root : app.settings.root) % 12;
+    if (own && scale == MK_PATTERN_SCALE_USER) return MK_SCALE_USER(p->user_scale ? p->user_scale : 0xFFF);
     return scale < MK_SCALE_COUNT ? scale : MK_SCALE_OFF;       /* MK_PATTERN_SCALE_OFF too */
 }
 
@@ -655,7 +656,8 @@ int main(void) {
     app.settings = (mk_settings){ .version = MK_SETTINGS_VERSION, .keys_on_track = 1, .seq_on = 1, .brightness = 0x8D,
                                    .arp = { .mode = MK_ARP_UP, .octaves = 1, .division = MK_DIV_16, .gate = 50, .swing = 50, .length = 16 },
                                    .cv = { .pitch_ref = 3, .gate_retrig = MK_RETRIG_LEGATO, .gate_format = 1,
-                                           .mod_source = { MK_MOD_VELOCITY, MK_MOD_WHEEL }, .mod_volts = { 5, 5 }, .bend_range = 2 } };
+                                           .mod_source = { MK_MOD_VELOCITY, MK_MOD_WHEEL }, .mod_volts = { 5, 5 }, .bend_range = 2,
+                                           .vibrato_rate = 10 } };
     mk_settings stored;
     if (mk_store_load_settings(&stored) == MK_STORE_OK && stored.version == MK_SETTINGS_VERSION) app.settings = stored;
     app.slot = app.settings.slot < MK_SLOTS ? app.settings.slot : 0;
@@ -668,6 +670,7 @@ int main(void) {
     mk_arp_init(&app.settings.arp, &arp_io);
     mk_clock_init(&clock_io);
     cv_apply();
+    ui_chord_changed(1);
     splash();
     ks_timer_start(5208, tick);
     app.redraw = 1;

@@ -61,6 +61,13 @@ static void test_scales(void) {
                 }
                 CHECK_EQ(mk_scale_fit(note, scale, root), best);
             }
+    /* a user scale: C D# G only, then on D; the root is in whatever the bits say */
+    CHECK_EQ(mk_scale_fit(61, MK_SCALE_USER(1 << 0 | 1 << 3 | 1 << 7), 0), 60);
+    CHECK_EQ(mk_scale_fit(62, MK_SCALE_USER(1 << 0 | 1 << 3 | 1 << 7), 0), 63);
+    CHECK_EQ(mk_scale_fit(65, MK_SCALE_USER(1 << 0 | 1 << 3 | 1 << 7), 0), 63);     /* 63 and 67 as near: down */
+    CHECK_EQ(mk_scale_fit(64, MK_SCALE_USER(1 << 3 | 1 << 7), 2), 65);             /* on D: D F A */
+    CHECK_EQ(mk_scale_fit(63, MK_SCALE_USER(0), 2), 62);                           /* nothing but the root */
+    CHECK_EQ(mk_scale_fit(66, MK_SCALE_USER(0xFFF), 5), 66);                       /* all twelve: every key */
     CHECK_EQ(mk_scale_fit(61, MK_SCALE_COUNT, 0), 61);
     CHECK_EQ(mk_scale_fit(61, -1, 0), 61);
     CHECK_EQ(mk_scale_fit(0, MK_SCALE_MAJOR, 2), 1);            /* nothing below the bottom: up */
@@ -118,6 +125,7 @@ static void test_chords(void) {
     c.preset = MK_CHORD_MIN;
     EXPECT(&c, 60, MK_SCALE_MAJOR, 60, 62, 67);
     EXPECT(&c, 62, MK_SCALE_MAJOR, 62, 65, 69);
+    EXPECT(&c, 60, MK_SCALE_USER(1 << 0 | 1 << 2 | 1 << 7), 60, 62, 67);       /* and to a user scale */
     c.preset = MK_CHORD_SUS2;                            /* two notes fitted onto one sound once */
     EXPECT(&c, 60, MK_SCALE_PENTATONIC_MINOR, 60, 63, 67);
     c.preset = MK_CHORD_MAJ11;                           /* the top of the range: what does not fit is left out */
@@ -166,7 +174,72 @@ static void test_strum(void) {
     ok("strum orders", before);
 }
 
+/* Voicing On against what the stock firmware 1.0.2 played in the emulator: each line is a key and
+ * the notes it sent, in the order sent, the key being let go before the next. */
+typedef struct { uint8_t key, n, want[6]; } voiced;
+
+static void session(mk_voicing *v, const mk_chord_settings *c, const voiced *lines, int count, int line) {
+    for (int i = 0; i < count; i++) {
+        uint8_t raw[MK_CHORD_NOTES], notes[MK_CHORD_NOTES];
+        int n = mk_chord_raw(c, lines[i].key, raw);
+        for (int k = 0; k < n; k++) notes[k] = raw[k];
+        mk_voicing_process(v, 1, notes, n);
+        check_eq(n, lines[i].n, "notes in the voiced chord", __FILE__, line);
+        for (int k = 0; k < n && k < lines[i].n; k++) check_eq(notes[k], lines[i].want[k], "voiced note", __FILE__, line);
+        mk_voicing_process(v, 0, raw, n);               /* the key is let go */
+    }
+}
+
+static void test_voicing(void) {
+    int before = failures;
+    static const voiced a[] = { { 60, 3, { 60, 63, 67 } }, { 65, 3, { 65, 68, 60 } }, { 67, 3, { 67, 70, 62 } },
+                                { 62, 3, { 62, 65, 69 } }, { 72, 3, { 72, 75, 79 } }, { 60, 3, { 60, 63, 67 } } };
+    static const voiced b[] = { { 60, 4, { 60, 63, 67, 70 } }, { 69, 4, { 69, 60, 64, 67 } }, { 71, 4, { 71, 74, 78, 81 } },
+                                { 55, 4, { 55, 58, 62, 65 } }, { 65, 4, { 65, 56, 60, 63 } }, { 72, 4, { 72, 75, 79, 82 } },
+                                { 53, 4, { 53, 56, 60, 63 } }, { 62, 4, { 62, 53, 57, 60 } } };
+    static const voiced c11[] = { { 60, 6, { 60, 64, 67, 71, 74, 77 } }, { 69, 6, { 69, 73, 76, 68, 71, 74 } },
+                                  { 71, 6, { 71, 75, 78, 70, 73, 76 } }, { 55, 6, { 67, 71, 74, 78, 69, 72 } },
+                                  { 65, 6, { 77, 69, 72, 76, 79, 70 } }, { 72, 6, { 72, 76, 79, 71, 74, 77 } },
+                                  { 53, 6, { 53, 57, 60, 64, 67, 70 } }, { 62, 6, { 62, 66, 69, 61, 64, 67 } } };
+    mk_chord_settings c = { 0 };
+    mk_voicing v = { 0 };
+    c.preset = MK_CHORD_MIN;
+    mk_voicing_set(&v, 1);
+    mk_voicing_process(&v, 0, 0, 0);                    /* stock: leaving the menu sends an empty release */
+    session(&v, &c, a, 6, __LINE__);
+    c.preset = MK_CHORD_MIN7;
+    mk_voicing_set(&v, 1);
+    mk_voicing_process(&v, 0, 0, 0);
+    session(&v, &c, b, 8, __LINE__);
+    c.preset = MK_CHORD_MAJ11;                          /* a preset change empties the window: an empty release */
+    mk_voicing_process(&v, 0, 0, 0);
+    session(&v, &c, c11, 8, __LINE__);
+    /* a note that folds onto an earlier one stays where it was: stock, Oct, 60 then 62 gives 62 74 */
+    static const voiced oct[] = { { 60, 2, { 60, 72 } }, { 62, 2, { 62, 74 } } };
+    c.preset = MK_CHORD_OCT;
+    mk_voicing_process(&v, 0, 0, 0);
+    session(&v, &c, oct, 2, __LINE__);
+    mk_voicing_set(&v, 0);                              /* off: nothing is touched */
+    uint8_t notes[3] = { 60, 64, 91 };
+    mk_voicing_process(&v, 1, notes, 3);
+    CHECK_EQ(notes[2], 91);
+    uint8_t top[3] = { 120, 124, 127 };                 /* the ends of the range: every note stays a note */
+    mk_voicing_set(&v, 1);
+    for (int round = 0; round < 4; round++) {
+        uint8_t low[3] = { 0, 3, 7 }, high[3] = { 120, 124, 127 };
+        mk_voicing_process(&v, 1, round & 1 ? low : high, 3);
+        for (int i = 0; i < 3; i++) CHECK_EQ((round & 1 ? low : high)[i] <= 127, 1);
+        mk_voicing_process(&v, 0, round & 1 ? low : top, 3);
+    }
+    uint8_t fit[4] = { 60, 61, 62, 67 };                /* fitting after voicing drops what lands on an earlier note */
+    CHECK_EQ(mk_chord_fit(fit, 4, MK_SCALE_MAJOR, 0), 3);
+    CHECK_EQ(fit[1], 62);
+    CHECK_EQ(fit[2], 67);
+    ok("Voicing On keeps chords in the register of the one before, as stock does in 24 chords", before);
+}
+
 int main(void) {
+    test_voicing();
     test_scales();
     test_chords();
     test_strum();
