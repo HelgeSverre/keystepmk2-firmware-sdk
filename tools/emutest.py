@@ -1330,6 +1330,59 @@ def check_mk_cv() -> str:
     return "pitch format and reference, bend range, gate retrig and format, mod sources and range, kept over a restart"
 
 
+def check_mk_shared_notes() -> str:
+    board = mk2000()
+    mk_record_steps(board, ("k7",))  # one step: C4 on, 62 ms, off, 62 ms, on ...
+    tap(board, "play", 40, 0)
+    board.run(300)
+    board.midi_out.clear()
+    events: list[tuple[float, bool]] = []  # (ms, on) of every C4 message
+    seen = 0
+
+    def watch(ms: int) -> None:
+        nonlocal seen
+        for _ in range(ms):
+            board.run(1)
+            data = bytes(b for b in board.midi_out if b < 0xF8)
+            for i in range(seen, len(data) - 2, 3):
+                if data[i + 1] == 60:
+                    events.append((board.us / 1000, data[i] & 0xF0 == 0x90 and data[i + 2] > 0))
+            seen = len(data) - len(data) % 3
+
+    watch(20)
+    board.press("k7")  # the key holds the note the track keeps playing, on the same channel
+    watch(500)
+    held = list(events)
+    board.release("k7")
+    watch(300)
+    tap(board, "stop")
+    watch(100)
+    silent = [later[0] - off[0] for off, later in itertools.pairwise(held) if not off[1]]
+    assert len(held) >= 8 and all(gap < 1 for gap in silent), f"the held note never goes quiet: {held}"
+    assert held[-1][1], "and is on when the key is let go"
+    count = 0
+    for _t, on in events:
+        count = 1 if on else 0
+    assert count == 0, "everything has ended after the key is up and Stop"
+    after = [on for t, on in events if t > held[-1][0]]
+    assert after.count(False) >= 2, "once the key is up the track's own note offs go out again"
+
+    # the step page: Hold makes the step a rest
+    mk_record_steps(board, ("k7", "k9", "k11"))
+    hold(board, "seq")
+    turn(board, 1)
+    tap(board, "k5")  # step 2, with Seq still held
+    assert "T1 Step 2" in small_text(board) and "Hold: rest" in small_text(board), small_text(board)
+    tap(board, "hold")
+    let_go(board, "seq")
+    assert shows(board, "Rest") and "click: edit" in small_text(board), all_text(board)
+    tap(board, "back")
+    assert played(board, 760)[:4] == [60, 64, 60, 64], "the step is a rest; the track keeps its length"
+    shift_key(board, "k31")  # Undo
+    assert played(board, 760)[:3] == [60, 62, 64], "Undo brings the step back"
+    return "a note held by a key and a track ends with its last holder; Hold clears a step on the step page"
+
+
 def check_mk_scale() -> str:
     board = mk2000()
     shift_key(board, "chord")
@@ -1888,6 +1941,7 @@ CHECKS = {
     "mk2000 controls": check_mk_controls,
     "mk2000 mutate": check_mk_mutate,
     "mk2000 cv": check_mk_cv,
+    "mk2000 shared notes": check_mk_shared_notes,
     "mk2000 scale": check_mk_scale,
     "mk2000 chord": check_mk_chord,
     "mk2000 arp settings": check_mk_arp_settings,

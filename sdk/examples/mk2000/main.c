@@ -49,11 +49,27 @@ static void send(const uint8_t *bytes, int n) { send_to(TO_DIN | TO_USB, bytes, 
 
 void app_send(const uint8_t *bytes, int n) { send(bytes, n); }
 
-/* Whatever plays on track 1's channel - the track, the keys, the arp - also plays on the CV
- * outputs (cv.c). */
+/* Every note of the tracks, the keys and the arp goes out through here, and several of them can
+ * hold the same note on the same channel: a track playing the note a key is holding, two tracks
+ * on one channel. A receiver knows a note only as on or off, so the note off goes out when the
+ * last holder lets go, not the first; a note struck while it is already held is ended and started
+ * again so that the new attack is heard.
+ *
+ * Whatever plays on track 1's channel also plays on the CV outputs (cv.c). */
+static uint8_t holders[16][128];
+
 void app_note(uint8_t channel, uint8_t note, uint8_t velocity) {
-    uint8_t message[3] = { (uint8_t)((velocity ? 0x90 : 0x80) | channel), note, velocity };
-    send(message, 3);
+    uint8_t on[3] = { (uint8_t)(0x90 | channel), note, velocity }, off[3] = { (uint8_t)(0x80 | channel), note, 0 };
+    uint8_t *held = &holders[channel & 15][note & 127];
+    uint32_t state = app_lock();
+    if (velocity) {
+        if (*held) send(off, 3);
+        if (*held < 255) (*held)++;
+        send(on, 3);
+    } else if (*held && !--*held) {
+        send(off, 3);
+    }
+    app_unlock(state);
     if (channel == mk_engine_pattern()->track[0].channel) cv_note(note, velocity);
 }
 

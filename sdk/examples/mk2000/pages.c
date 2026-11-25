@@ -474,7 +474,25 @@ static void chain_switch(int on) {
     app.chain_dirty = 1;
 }
 
+/* The step page: the step becomes a rest, as Hold makes one in step recording. Its other fields
+ * stay, for the notes put there next. */
+static void clear_step(void) {
+    mk_step *s = step();
+    if (!mk_step_used(s)) return;
+    before_edit();
+    uint32_t state = app_lock();
+    for (int i = 0; i < MK_POLY; i++) s->note[i] = 0;
+    s->flags = (uint8_t)(s->flags & ~MK_STEP_TIE);
+    s->offset = 0;
+    app_unlock(state);
+    after_edit();
+}
+
 int pages_hold(void) {
+    if (kind == PAGE_STEPS) {
+        clear_step();
+        return 1;
+    }
     if (kind != PAGE_CHAIN) return 0;
     if (app.chain.count) {
         app.chain.count--;
@@ -485,6 +503,10 @@ int pages_hold(void) {
 }
 
 int pages_clear(void) {
+    if (kind == PAGE_STEPS) {
+        clear_step();
+        return 1;
+    }
     if (kind != PAGE_CHAIN) return 0;
     if (app.chain.count) app.chain_dirty = 1;
     app.chain.count = 0;
@@ -632,7 +654,7 @@ static void step_list_screen(void) {
     char line[48];
     step_title(line);
     text(SMALL, 0, TOP, line);
-    right(SMALL, TOP, "click: edit");
+    right(SMALL, TOP, mk_step_used(step()) ? "Hold: rest" : "click: edit");
     notes_text(line, LARGE, KS_OLED_W);
     text(LARGE, 0, MID, line);
     int page = cursor / 16, used = 0;
