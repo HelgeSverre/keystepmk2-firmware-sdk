@@ -1,17 +1,84 @@
-# KeyStep mk2 firmware notes
+# KeyStep mk2 custom firmware SDK
 
-Reverse-engineering notes and tools for the firmware of the Arturia KeyStep mk2, working towards
-custom firmware with an SDK and an emulator ([ROADMAP](docs/ROADMAP.md)). The stock firmware is
-mapped and boots in the emulator. On one unit the bootloader has been read out, stock and modified
-images flashed and verified, and SDK firmware run ([FLASHING](docs/FLASHING.md)).
+![KeyStep MK2000 running in the emulator's KeyStep window](docs/panel-mk2000.png)
 
-Unofficial. Not affiliated with or endorsed by Arturia.
+A C SDK, a USB flasher and an emulator for writing your own firmware for the Arturia KeyStep
+mk2, the 32-key model. Firmware is flashed over the unit's own USB port, read back and verified
+before it starts, and every way back to Arturia's firmware has been tried on a unit.
 
-**Flashing is at your own risk.** It has been done on one 32-key unit, with a recovery path
-proven there. Other units and the 37-key model are untried, and a mistake can leave a unit that
-does not start. Read [FLASHING](docs/FLASHING.md) before you flash anything.
+This repository holds three things:
 
-![The stock firmware running in the panel](docs/panel.png)
+- **`sdk/`**: a small C SDK. Display and two display fonts, the 13 button lights, buttons,
+  encoder, keys with velocity, touch strips, aftertouch and pedal, MIDI on DIN and USB, pitch
+  and mod CV, gate and sync, and storage in the part of the external flash Arturia's firmware
+  never uses. A self-test firmware checks it on a unit.
+- **KeyStep MK2000** (`sdk/examples/mk2000`): a four-track sequencer firmware built on it, with
+  the stock firmware's gestures, its arpeggiator, chords, scales, Mutate and Spice, chains and
+  external clock. [User guide](docs/USER-GUIDE.md) and [design](docs/MK2000.md).
+- **The reverse-engineering work behind it** (`docs/`, `tools/`, `ghidra/`): the image format,
+  the bootloader and its update protocol, the SysEx commands, the hardware map, and an emulator
+  that runs the stock firmware and SDK firmware alike.
+
+This project is unofficial and is not affiliated with or endorsed by Arturia. You flash your unit
+at your own risk: flashing has been done on one 32-key unit, with a recovery path proven there;
+other units and the 37-key model are untried. Read [FLASHING](docs/FLASHING.md) before you flash
+anything.
+
+## Quick start
+
+Requires `arm-none-eabi-gcc`, [`uv`](https://docs.astral.sh/uv/) and
+[`just`](https://github.com/casey/just) 1.27 or later, and libusb to flash. Developed on macOS;
+nothing in it is macOS-only, and Linux is untried.
+
+```sh
+brew install arm-none-eabi-gcc uv just libusb     # macOS
+```
+
+All commands run from the repository root. `just` on its own lists them.
+
+```sh
+just host mk2000      # MK2000 in a window that looks and plays like the KeyStep
+just flash mk2000     # build it and flash it to a connected unit
+just new mything      # start your own app in sdk/examples/mything, copied from hello
+just fetch            # download Arturia's published firmware: to go back, and for the stock checks
+just flash-stock      # flash Arturia's 1.0.2 again
+```
+
+`just flash` asks the running firmware for update mode, sends the image, reads it back and only
+then starts it. Before the first flash, copy your unit's external flash as
+[FLASHING](docs/FLASHING.md) describes: it holds the unit's own calibration.
+
+## Requirements and recipes in full
+
+| For | You need |
+|---|---|
+| Every recipe | [`just`](https://github.com/casey/just) 1.27 or later and [`uv`](https://docs.astral.sh/uv/) (it installs Python and the packages) |
+| Building SDK apps | `arm-none-eabi-gcc` (macOS: `brew install arm-none-eabi-gcc`; Debian and Ubuntu: `gcc-arm-none-eabi`) |
+| `just test` | also a host C compiler with the address and undefined-behaviour sanitizers (clang or gcc) |
+| `just host`, `just shot` | a desktop: the window is pygame |
+| `just flash`, `just probe`, `just verify` | libusb (macOS: `brew install libusb`) |
+| `just analyze` | Ghidra and a JDK; set `GHIDRA_HOME` and `JAVA_HOME` if they are not where Homebrew puts them |
+
+Arturia's firmware is not in this repository. Every SDK app, MK2000 included, builds from a fresh
+clone; `just fetch` downloads the published packages from Arturia, which `just test` (it runs the
+stock firmware too), `just host stock` and the analysis recipes need.
+
+```bash
+just fetch            # download and unpack all known versions
+just selftest         # rebuild every stock image header and compare (not the self-test firmware)
+just host stock       # the stock firmware in a window you can click
+just host hello       # build an app and open it in the same window
+just host mk2000      # KeyStep MK2000: the four-track firmware (docs/MK2000.md)
+just shot mk2000      # a picture of it after 3 s, as mk2000.png
+just flash-sim hello  # rehearse flashing it: emulated device, model of the bootloader
+just test             # emulator checks of the stock firmware and the SDK examples, MK2000's host tests
+just probe            # read a connected KeyStep's USB descriptors (sends nothing else)
+just sim stock --ms 5000 --script "2500 tap=seq; 4000 show"   # the same without a window
+just check            # lint and build every app
+just analyze 1.0.4    # decompile one (needs Ghidra and a JDK)
+```
+
+## What is where
 
 | Path | Contents |
 |------|----------|
@@ -37,44 +104,12 @@ does not start. Read [FLASHING](docs/FLASHING.md) before you flash anything.
 | `tools/selftest.py` | Receives and decodes the self-test firmware's report ([SELFTEST.md](docs/SELFTEST.md)) |
 | `tools/selftest_emu.py` | Runs the self-test firmware in the emulator, doing what a person would |
 | `tools/screentext.py` | Reads text off the emulated display, for the checks |
-| `tools/fontextract.py` | Reads the stock display fonts out of an image, for the SDK |
+| `tools/fontextract.py` | Reads the stock display fonts out of an image, for analysis and the display reader |
+| `tools/bdffont.py` | Makes the SDK's two display fonts from the X11 bitmaps in `sdk/third_party/x11-adobe` |
 | `tools/panel.py` | A window that looks like the KeyStep, on top of the emulator |
 | `sdk/` | C SDK: start-up code, board drivers and examples, for the emulator and a unit ([README](sdk/README.md)) |
 | `ghidra/names-1.0.2.tsv` | Names for identified functions |
 | `ghidra/` | Headless Ghidra pipeline: import, function seeding, export, version diff |
-
-## Requirements
-
-| For | You need |
-|---|---|
-| Every recipe | [`just`](https://github.com/casey/just) 1.27 or later and [`uv`](https://docs.astral.sh/uv/) (it installs Python and the packages) |
-| Building SDK apps | `arm-none-eabi-gcc` (macOS: `brew install arm-none-eabi-gcc`; Debian and Ubuntu: `gcc-arm-none-eabi`) |
-| `just test` | also a host C compiler with the address and undefined-behaviour sanitizers (clang or gcc) |
-| `just host`, `just shot` | a desktop: the window is pygame |
-| `just flash`, `just probe`, `just verify` | libusb (macOS: `brew install libusb`) |
-| `just analyze` | Ghidra and a JDK; set `GHIDRA_HOME` and `JAVA_HOME` if they are not where Homebrew puts them |
-
-Developed on macOS; nothing in it is macOS-only, and Linux is untried.
-
-Run `just fetch` first. Arturia's firmware is not in this repository: `just fetch` downloads the
-published packages from Arturia. The emulator checks run them, and MK2000, `selftest` and
-`fonts` are built with the display fonts read out of them, so `just test`, `just build-all` and
-`just host mk2000` fail without it. `hello`, `cv` and `flashtest` build without.
-
-```bash
-just fetch            # download and unpack all known versions
-just selftest         # rebuild every stock image header and compare (not the self-test firmware)
-just host stock       # the stock firmware in a window you can click
-just host hello       # build an app and open it in the same window
-just host mk2000      # KeyStep MK2000: the four-track firmware (docs/MK2000.md)
-just shot mk2000      # a picture of it after 3 s, as mk2000.png
-just flash-sim hello  # rehearse flashing it: emulated device, model of the bootloader
-just test             # emulator checks of the stock firmware and the SDK examples, MK2000's host tests
-just probe            # read a connected KeyStep's USB descriptors (sends nothing else)
-just sim stock --ms 5000 --script "2500 tap=seq; 4000 show"   # the same without a window
-just check            # lint and build every app
-just analyze 1.0.4    # decompile one (needs Ghidra and a JDK)
-```
 
 ## What is known
 
@@ -99,8 +134,8 @@ just analyze 1.0.4    # decompile one (needs Ghidra and a JDK)
   the CV, gate and sync pins and runs as the 37-key model. A pattern slot in the flash is the
   same 4096 bytes as a pattern in a `.keystep2` file.
 - The SDK builds firmware with drivers for every mapped part including USB MIDI, CV, gate and
-  sync, and a four-track sequencer (MK2000) runs on it. It can draw with the stock fonts, read
-  from your copy of the image. `flashdump`, `bootdump`, `selftest` and MK2000 have run on a unit:
+  sync, and a four-track sequencer (MK2000) runs on it. It has two display fonts laid out like
+  the stock ones, made from the X11 Helvetica bitmaps. `flashdump`, `bootdump`, `selftest` and MK2000 have run on a unit:
   what was checked there is in [SELFTEST.md](docs/SELFTEST.md) and at the top of
   [MK2000.md](docs/MK2000.md). MIDI DIN, CV, gate and sync have not been tried on a unit.
 - 1.0.1 and 1.0.2 contain identical code. 1.0.4 keeps the same SysEx operations and pattern
@@ -118,13 +153,15 @@ untried: read that file first, take the copy of the external flash it describes,
 The tools, the SDK, the examples and the notes are under the MIT licence ([LICENSE](LICENSE)).
 That does not cover Arturia's firmware, which is not in this repository: `just fetch` downloads
 the published packages from Arturia, and anything read from a unit stays in the git-ignored
-`firmware/device/`. A firmware built with the stock display fonts (MK2000 is) contains Arturia's
-font data, so build it yourself and do not pass the image on.
+`firmware/device/`. Nothing of Arturia's goes into a firmware built with the SDK.
 
 Third-party material in the repository:
 
 - The Barlow fonts in `tools/assets`, and the subsets of them embedded in `docs/user-guide.html`:
   the Barlow Project Authors, SIL Open Font License 1.1 (`tools/assets/OFL.txt`).
+- `sdk/third_party/x11-adobe`, and the SDK's two display fonts made from it
+  (`sdk/include/keystep_fonts.h`): Adobe Systems and Digital Equipment, under the X11 notice in
+  `sdk/third_party/x11-adobe/COPYING`.
 - `sdk/third_party/font8x8_basic.h`: public domain (Daniel Hepper, from Marcel Sondaar's and
   IBM's VGA fonts).
 

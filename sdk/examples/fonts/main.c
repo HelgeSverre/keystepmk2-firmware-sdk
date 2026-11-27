@@ -1,7 +1,6 @@
-/* fonts: the stock firmware's two display fonts next to the SDK's built-in one.
+/* fonts: the SDK's two proportional fonts next to its built-in 8 x 8 one.
  *
- * Including "keystep_fonts.h" is all it takes: the build writes that header from your copy of
- * the stock image (firmware/, fetched with `just fetch`). The fonts are not part of the SDK.
+ * Including "keystep_fonts.h" is all it takes (sdk/README.md, Fonts).
  *
  *   encoder   change the number
  *   any key   show its note name */

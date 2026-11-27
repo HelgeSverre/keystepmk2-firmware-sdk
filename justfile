@@ -47,9 +47,14 @@ info file=("firmware/keystep_mk2__" + replace(version, ".", "_") + ".ks2fw"):
 body file out:
     {{ uv }} run tools/fwpack.py body {{ file }} -o {{ out }}
 
-# Write the stock fonts' header for the SDK, or preview a text: just fonts show 1 "Text"
+# Write the SDK's fonts' header again, or preview a text: just fonts show large "Text"
 [group('firmware')]
-fonts *args="header -o sdk/build/generated/keystep_fonts.h":
+fonts *args="header -o sdk/include/keystep_fonts.h":
+    {{ uv }} run tools/bdffont.py {{ args }}
+
+# Preview a text in the stock firmware's fonts (needs `just fetch`): just stock-fonts show 1 "Text"
+[group('analysis')]
+stock-fonts *args:
     {{ uv }} run tools/fontextract.py {{ args }}
 
 # Remove build output

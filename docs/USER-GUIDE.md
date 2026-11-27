@@ -241,6 +241,7 @@ stopped, always, or never.
 | Choose 1–4 octaves | Arp + bank key |
 | Latch | Hold. New keys replace the latched ones |
 | Open its settings | Arp + encoder click |
+| Keep what it plays as a track | Shift + Arp (To Seq), with keys in the arp. The selected track becomes the arp's pattern, one step a note; Undo takes it back |
 
 The arp plays on the channel the keys go to and stays in step with the tracks. It starts as Up,
 one octave, 1/16.
@@ -393,6 +394,7 @@ Settings are saved two seconds after the last change, once the clock is stopped.
 | Chord + encoder click | Chord page |
 | Mutate | New variation of the track; hold for more or less of it |
 | Shift + Mutate | The original back |
+| Shift + Arp | To Seq: the arp's pattern becomes the selected track |
 | Shift + Chord | Scale page |
 | Shift + Stop tap | Keys: Track or Home |
 | Shift + Stop + numbered key | Home channel |

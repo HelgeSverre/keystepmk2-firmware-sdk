@@ -20,7 +20,7 @@ static const char *why(int gave_up) { return gave_up ? "given up" : "timeout"; }
 
 /* ---- display: a frame on the outermost pixels, 1 2 3 4 in the corners (top left, top right,
  * bottom left, bottom right), two dotted columns with every other row lit, the SDK's font, and
- * both stock fonts, the large one dark on a lit bar ---- */
+ * both proportional fonts, the large one dark on a lit bar ---- */
 
 static void check_display(void) {
     static const char hint[] = "Play=ok Stop=bad", word[] = "Display";

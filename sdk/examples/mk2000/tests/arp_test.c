@@ -769,6 +769,54 @@ static void test_soak(void) {
     ok("long random run: every note on ends, none twice", before);
 }
 
+/* mk_arp_render: the pattern as steps, without a sound and without moving the arp. */
+static void test_render(void) {
+    int before = failures;
+    static mk_step out[MK_STEPS];
+    setup();
+    for (int i = 0; i < MK_STEPS; i++) out[i] = (mk_step){ 0 };
+    CHECK_EQ(mk_arp_render(out, MK_STEPS), 0);          /* no keys: nothing */
+    mk_arp_key(64, 90);                                 /* E C G, pressed in that order */
+    mk_arp_key(60, 100);
+    mk_arp_key(67, 80);
+    run(30);                                            /* the arp is playing: two steps in */
+    int logged_before = logged;
+    CHECK_EQ(mk_arp_render(out, MK_STEPS), 3);          /* Up, free running: once round the set */
+    CHECK_EQ(out[0].note[0], 60);
+    CHECK_EQ(out[0].velocity[0], 100);
+    CHECK_EQ(out[1].note[0], 64);
+    CHECK_EQ(out[2].note[0], 67);
+    CHECK_EQ(out[2].velocity[0], 80);
+    CHECK_EQ(out[0].note[1], 0);
+    CHECK_EQ(out[3].note[0], 0);
+    CHECK_EQ(logged, logged_before);                    /* nothing sounded */
+    run(24 * 4);                                        /* and the arp goes on from where it was */
+    EXPECT_PITCHES(60, 64, 67, 60, 64, 67);
+    set.octaves = 2;
+    set.mode = MK_ARP_UP_DOWN;
+    for (int i = 0; i < MK_STEPS; i++) out[i] = (mk_step){ 0 };
+    CHECK_EQ(mk_arp_render(out, MK_STEPS), 10);         /* six places up and down, the ends once */
+    static const uint8_t up_down[10] = { 60, 64, 67, 72, 76, 79, 76, 72, 67, 64 };
+    for (int i = 0; i < 10; i++) CHECK_EQ(out[i].note[0], up_down[i]);
+    set.mode = MK_ARP_POLY;
+    for (int i = 0; i < MK_STEPS; i++) out[i] = (mk_step){ 0 };
+    CHECK_EQ(mk_arp_render(out, MK_STEPS), 2);          /* the chord in each octave */
+    CHECK_EQ(out[0].note[0], 60);
+    CHECK_EQ(out[0].note[2], 67);
+    CHECK_EQ(out[1].note[1], 76);
+    set.mode = MK_ARP_ORDER;
+    set.octaves = 1;
+    set.free_run = 0;                                   /* Arp Length 8: eight steps, the set round and round */
+    set.length = 8;
+    for (int i = 0; i < MK_STEPS; i++) out[i] = (mk_step){ 0 };
+    CHECK_EQ(mk_arp_render(out, MK_STEPS), 8);
+    static const uint8_t order[8] = { 64, 60, 67, 64, 60, 67, 64, 60 };
+    for (int i = 0; i < 8; i++) CHECK_EQ(out[i].note[0], order[i]);
+    CHECK_EQ(mk_arp_render(out, 5), 5);                 /* no more than there is room for */
+    CHECK_EQ(doubled + unmatched, 0);
+    ok("mk_arp_render writes the pattern as steps without sounding it or moving the arp", before);
+}
+
 int main(void) {
     test_names();
     test_orders();
@@ -787,6 +835,7 @@ int main(void) {
     test_repeated_pitch();
     test_deferred_tick();
     test_soak();
+    test_render();
     if (failures) printf("%d checks failed\n", failures);
     return failures != 0;
 }

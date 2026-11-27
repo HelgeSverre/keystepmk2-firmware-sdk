@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""Read the text on the emulated display by matching the stock fonts' glyphs.
+"""Read the text on the emulated display by matching a pair of fonts' glyphs.
 
     from screentext import Reader
-    reader = Reader()                 # fonts from stock 1.0.2 (tools/fontextract.py)
+    reader = Reader()                 # the stock firmware's fonts, from stock 1.0.2 (tools/fontextract.py)
+    reader = Reader.sdk()             # the SDK's fonts (tools/bdffont.py)
     print(reader.read(board))         # ["Tempo: 120.0   1/16", "Bank: 1 | Preset: 1"]
 
-Only text drawn in the two stock fonts is found, so this reads the stock firmware's screens and
-SDK screens that use those fonts. Lines come back top to bottom; text in the large font is
+Only text drawn in the reader's fonts is found: the stock reader reads the stock firmware's
+screens, the SDK reader screens drawn with ks_font_small and ks_font_large. Lines come back top to bottom; text in the large font is
 marked by the caller if needed through `read_lines`, which also gives positions.
 """
 
@@ -22,9 +23,12 @@ WIDTH, HEIGHT = 128, 32
 
 
 class Reader:
-    def __init__(self, image: Path = fontextract.STOCK):
+    def __init__(self, image: Path = fontextract.STOCK, fonts: list | None = None):
         self.fonts = []
-        for font in fontextract.find(image):
+        self.alike = set()  # heights of the fonts that draw 0 and O alike
+        for font in fonts if fonts is not None else fontextract.find(image):
+            if font.rows(ord("0")) == font.rows(ord("O")):
+                self.alike.add(font.height)
             cells = {}
             for code, (width, _data) in enumerate(font.glyphs, font.first):
                 if not width or code > 0x7E or chr(code) in "^`~_'\"":  # marks a frame's corners read as
@@ -40,17 +44,26 @@ class Reader:
                 last = max([r for r in range(font.height) if rows[r]] + [base])
                 glyphs.append((char, width, rows, sum(r.bit_count() for r in rows), range(top, last + 1)))
             glyphs.sort(key=lambda g: -g[3])  # most ink first, so "B" is tried before "I"
+            # A blank column, read as nothing: pieces of text drawn apart need not be a whole
+            # number of spaces apart to be read as one line.
+            glyphs.append(("", 1, [0] * font.height, 0, range(top, base + 1)))
             self.fonts.append((font.height, glyphs, range(top, bottom + 1)))
 
+    @classmethod
+    def sdk(cls) -> Reader:
+        import bdffont
+
+        return cls(fonts=bdffont.fonts())
+
     def width(self, height: int, text: str) -> int:
-        widths = next({c: w for c, w, *_rest in g} for h, g, _u in self.fonts if h == height)
+        widths = next({c: w for c, w, *_rest in g if c} for h, g, _u in self.fonts if h == height)
         return sum(widths[c] for c in text)
 
-    @staticmethod
-    def settle(height: int, text: str) -> str:
-        """The small font draws 0 and O alike. Word by word: a zero in a word with other digits, or
-        with no letters, stays a zero; in a word of letters it is an O ("OK", "Oct", "Overdub")."""
-        if height >= 12:
+    def settle(self, height: int, text: str) -> str:
+        """The stock small font draws 0 and O alike. Word by word: a zero in a word with other
+        digits, or with no letters, stays a zero; in a word of letters it is an O ("OK", "Oct",
+        "Overdub"). Fonts that tell them apart are left as read."""
+        if height not in self.alike:
             return text
         words = []
         for word in text.split(" "):
@@ -80,7 +93,12 @@ class Reader:
                         if ink and (best[x] is None or ink > best[x][0]):
                             best[x] = (ink, char, x + width)
                 for x in range(WIDTH):
-                    if best[x] is None or best[x][1] == " " or (x and best[x - 1] and best[x - 1][2] == x):
+                    before = best[x - 1] if x else None  # a character that ends here: x is not where a reading starts
+                    if (
+                        best[x] is None
+                        or best[x][1] in (" ", "")
+                        or (before and before[2] == x and before[1] not in (" ", ""))
+                    ):
                         continue  # not the start of a reading
                     run, at = "", x
                     while best[at]:

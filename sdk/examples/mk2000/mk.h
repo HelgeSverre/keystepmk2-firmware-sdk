@@ -192,6 +192,10 @@ int mk_arp_held(void);                                  /* how many notes the ar
 void mk_arp_tick(void);                                 /* one of 96 per quarter note, always running */
 void mk_arp_sync(void);                                 /* the sequencer started: restart the step grid from this tick */
 void mk_arp_clear(void);                                /* forget every key and end the sounding notes */
+/* Write the arp's pattern from its beginning into `out` (steps the caller has emptied), a step
+ * each, without sounding it: Arp Length steps, or once round the set with Arp Retrigger off.
+ * Returns how many, at most `max`; 0 with no keys in the arp. */
+int mk_arp_render(mk_step *out, int max);
 
 /* ---- scales and chords ---- */
 

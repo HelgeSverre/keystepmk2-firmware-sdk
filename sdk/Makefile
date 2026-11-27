@@ -4,7 +4,7 @@
 #   make sim             run the build in the emulator and print the display
 #   make panel           run it in the KeyStep window
 #   make flash-sim       rehearse flashing it, in the emulator
-#   make fonts           write build/generated/keystep_fonts.h from the stock image (done when needed)
+#   make fonts           write include/keystep_fonts.h again from third_party/x11-adobe (it is committed)
 #   make new APP=myapp   start examples/myapp from examples/hello
 # Flashing a unit is `just flash myapp` in the repository root (tools/ksflash.py, docs/FLASHING.md).
 APP     ?= hello
@@ -16,17 +16,11 @@ CFLAGS  := -mcpu=cortex-m0plus -mthumb -Os -g -ffreestanding -ffunction-sections
            -Wall -Wextra -Werror -Wno-override-init -Iinclude
 LDFLAGS := -nostdlib -Wl,--gc-sections -Wl,-T,ld/keystep.ld -Wl,-Map,$(BUILD)/$(APP).map
 SRC     := $(wildcard src/*.c) $(wildcard examples/$(APP)/*.c)
-# The stock firmware's fonts, taken from your copy of its image when a firmware includes the header.
-FONTS   := build/generated/keystep_fonts.h
-ifneq ($(shell grep -l keystep_fonts.h examples/$(APP)/*.c examples/$(APP)/*.h 2>/dev/null),)
-NEEDS   := $(FONTS)
-CFLAGS  += -Ibuild/generated
-endif
 MS      ?= 3000
 
 all: $(BUILD)/$(APP).img
 
-$(BUILD)/$(APP).elf: $(SRC) include/*.h src/*.h $(wildcard examples/$(APP)/*.h) ld/keystep.ld $(NEEDS)
+$(BUILD)/$(APP).elf: $(SRC) include/*.h src/*.h $(wildcard examples/$(APP)/*.h) ld/keystep.ld
 	@mkdir -p $(BUILD)
 	$(CC) $(CFLAGS) $(SRC) $(LDFLAGS) -lgcc -o $@
 	arm-none-eabi-size $@
@@ -38,9 +32,8 @@ $(BUILD)/$(APP).bin: $(BUILD)/$(APP).elf
 $(BUILD)/$(APP).img: $(BUILD)/$(APP).bin
 	cd .. && uv run tools/fwpack.py image sdk/$< --version $(VERSION) -o sdk/$@
 
-fonts: $(FONTS)
-$(FONTS): ../tools/fontextract.py
-	cd .. && uv run tools/fontextract.py header -o sdk/$@
+fonts:
+	cd .. && uv run tools/bdffont.py header -o sdk/include/keystep_fonts.h
 
 sim: $(BUILD)/$(APP).img
 	cd .. && uv run --with unicorn tools/emu.py sdk/$< --ms $(MS) --quiet --flash sdk/$(BUILD)/flash.bin $(if $(SCRIPT),--script "$(SCRIPT)")

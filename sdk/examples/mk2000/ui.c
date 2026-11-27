@@ -53,6 +53,37 @@ static void clear_steps(mk_track *t) {
     app_unlock(state);
 }
 
+/* Shift + Arp, "To Seq": what the arp plays becomes the selected track, in the arp's time
+ * division, gate and swing, so the track then plays what the arp did. Undo brings the track back. */
+static void arp_to_seq(void) {
+    static mk_step steps[MK_STEPS];
+    static mk_pattern blank;
+    if (!blank.tempo) mk_pattern_init(&blank);
+    memcpy(steps, blank.track[0].step, sizeof steps);
+    int n = mk_arp_render(steps, MK_STEPS);
+    if (!n) {
+        app_message("Arp is empty");
+        return;
+    }
+    mk_track *t = track();
+    const mk_arp_settings *arp = &app.settings.arp;
+    for (int s = 0; s < n; s++)                         /* the track's Transpose is added again when it plays */
+        for (int i = 0; i < MK_POLY && steps[s].note[i]; i++) {
+            int note = steps[s].note[i] - t->shift;
+            steps[s].note[i] = (uint8_t)(note < 1 ? 1 : note > 127 ? 127 : note);
+        }
+    app_snapshot();
+    uint32_t state = app_lock();
+    memcpy(t->step, steps, sizeof t->step);
+    t->length = (uint8_t)n;
+    t->division = arp->division < MK_DIV_COUNT ? arp->division : MK_DIV_16;
+    t->gate = arp->gate < 10 ? 10 : arp->gate > 90 ? 90 : arp->gate;
+    t->swing = arp->swing < 50 ? 50 : arp->swing > 75 ? 75 : arp->swing;
+    app_unlock(state);
+    edited();
+    app_message("Arp To Seq");
+}
+
 static void step_add(mk_step *step, uint8_t note, uint8_t velocity) {
     for (int i = 0; i < MK_POLY; i++) {
         if (step->note[i] == note) return;
@@ -568,6 +599,7 @@ static void pressed_button(uint32_t button, uint32_t buttons, uint32_t now) {
         if (!others) tempo_tap(now);
         break;
     case KS_BTN_ARP:
+        if (others == KS_BTN_SHIFT && !app.recording) arp_to_seq();     /* the legend under the button: To Seq */
         arp_alone = !others;
         arp_at = now;
         combo_used = 0;
@@ -603,6 +635,9 @@ static void pressed_button(uint32_t button, uint32_t buttons, uint32_t now) {
             pages_open(app.layer == LAYER_ARP ? PAGE_ARP : PAGE_CHORD, buttons);
         } else if (app.layer != LAYER_HOME) {
             break;
+        } else if (pages_active() == PAGE_STEPS && others == KS_BTN_SEQ) {
+            combo_used = 1;                             /* Seq + click is the track's settings from the step page too */
+            pages_open(PAGE_TRACK, buttons);
         } else if (pages_active()) {
             pages_click();
         } else if (!others) {
@@ -664,7 +699,8 @@ static void released_button(uint32_t button, uint32_t now) {
  * leaves Shift held, and the numbered keys must then go to the chain, not pick a pattern. */
 static uint8_t layer_for(uint32_t buttons) {
     if (app.layer == LAYER_SAVE) return LAYER_SAVE;
-    if (pages_holding()) return LAYER_HOME;
+    /* ... except the step page, which Seq opens: Shift there is Shift, not a way to enter notes */
+    if (pages_holding() && !(pages_active() == PAGE_STEPS && buttons & KS_BTN_SHIFT)) return LAYER_HOME;
     if (buttons & KS_BTN_SHIFT) {
         if (buttons & KS_BTN_STOP && stop_at) return LAYER_CHANNEL;
         if (buttons & KS_BTN_TEMPO) return LAYER_LENGTH;

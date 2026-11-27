@@ -46,7 +46,9 @@ def boot(image: Path, ms: float, **kwargs) -> emu.Board:
 
 
 def stock(**kwargs) -> emu.Board:
-    return boot(STOCK, 3000, **kwargs)
+    board = boot(STOCK, 3000, **kwargs)
+    board.stock_fonts = True  # the display reader matches the stock firmware's fonts on this one
+    return board
 
 
 def sdk(app: str, ms: float = 400, **kwargs) -> emu.Board:
@@ -403,18 +405,23 @@ def timed_notes(board: emu.Board, ms: int) -> list[tuple[float, int]]:
     return found
 
 
-_reader = None
+_readers: dict[bool, object] = {}
+
+
+def reader(board: emu.Board):
+    """The display reader for this board's fonts: the stock firmware's, or the SDK's."""
+    stock_fonts = getattr(board, "stock_fonts", False)
+    if stock_fonts not in _readers:
+        import screentext
+
+        _readers[stock_fonts] = screentext.Reader() if stock_fonts else screentext.Reader.sdk()
+    return _readers[stock_fonts]
 
 
 def small_text(board: emu.Board) -> str:
     """The text on the display in the small font, which reads reliably; the large font's 1, l
     and I look alike."""
-    global _reader
-    if _reader is None:
-        import screentext
-
-        _reader = screentext.Reader()
-    return "   ".join(text for _y, _x, height, text in _reader.read_lines(board) if height < 12)
+    return "   ".join(text for _y, _x, height, text in reader(board).read_lines(board) if height < 12)
 
 
 def step_field(board: emu.Board, field: int, detents: int) -> None:
@@ -654,7 +661,7 @@ def check_mk_arp() -> str:
 def all_text(board: emu.Board) -> str:
     """Every line on the display, with the large font's look-alikes 1, l and I folded into l."""
     small_text(board)
-    return re.sub("[1I]", "l", "   ".join(text for _y, _x, _h, text in _reader.read_lines(board)))
+    return re.sub("[1I]", "l", "   ".join(text for _y, _x, _h, text in reader(board).read_lines(board)))
 
 
 def shows(board: emu.Board, words: str) -> bool:
@@ -1115,8 +1122,9 @@ def check_mk_mutate() -> str:
     hold(board, "mutate")  # held: the helix, turning, and the light going round the colours
     board.run(300)
     first, light = board.oled.render(), board.leds[1][6]
-    assert all_text(board).strip() == "" and first.count("█") > 60, (
-        f"a drawing and no text while Mutate is held:\n{first}"
+    seen = [c for c in all_text(board) if c.isalnum() and c not in "lI1"]  # straight strokes read as l
+    assert not seen and sum(first.count(c) for c in "▀▄█") > 150, (
+        f"a drawing and no text while Mutate is held: {all_text(board)!r}\n{first}"
     )
     board.run(300)
     assert board.oled.render() != first and board.leds[1][6] != light, "it moves, and so does the colour"
@@ -1357,6 +1365,29 @@ def check_mk_shared_notes() -> str:
     return "a note held by a key and a track ends with its last holder; Hold clears a step on the step page"
 
 
+def check_mk_arp_to_seq() -> str:
+    board = mk2000()
+    shift_key(board, "arp")
+    assert shows(board, "Arp is empty"), all_text(board)
+    board.run(1300)
+    tap(board, "arp")
+    for key in ("k11", "k7", "k14"):  # E4, C4, G4
+        board.press(key)
+        board.run(20)
+    board.run(300)
+    shift_key(board, "arp")  # the legend under Arp: To Seq
+    assert shows(board, "Arp To Seq"), all_text(board)
+    for key in ("k11", "k7", "k14"):
+        board.release(key)
+    board.run(100)
+    tap(board, "arp")  # the arp off: what plays now is the track
+    board.run(1300)
+    assert played(board, 1000)[:7] == [60, 64, 67, 60, 64, 67, 60], "the track plays what the arp did: Up, three steps"
+    shift_key(board, "k31")  # Undo
+    assert played(board, 600) == [], "Undo: the empty track again"
+    return "Shift + Arp writes the arp's pattern into the selected track, and Undo takes it back"
+
+
 def check_mk_step_list() -> str:
     board = mk2000()
     mk_record_steps(board, ("k7", "k9", "k11"))  # C4 D4 E4: three steps
@@ -1388,7 +1419,23 @@ def check_mk_step_list() -> str:
     tap(board, "k1")  # Seq + bank key 2: track 2, as everywhere
     assert "T2 Step 19" in small_text(board), small_text(board)
     tap(board, "k0")
+    turn(board, -1)
+    hold(board, "shift")  # Shift is Shift here too, with Seq still down: Clear makes the step a rest
+    tap(board, "k30")
+    let_go(board, "shift")
+    assert "T1 Step 3" in small_text(board) and shows(board, "Rest"), all_text(board)
+    tap(board, "encoder")  # Seq + click: the track's settings, as everywhere
+    assert "T1 Settings" in small_text(board), small_text(board)
     let_go(board, "seq")
+    tap(board, "back")
+    if "T1 Settings" in small_text(board) or "Step" in small_text(board):
+        tap(board, "back")
+    hold(board, "seq")  # back to step 3, which takes its note again with Seq let go
+    turn(board, 1)
+    let_go(board, "seq")
+    turn(board, 2)
+    tap(board, "k11")
+    assert "T1 Step 3" in small_text(board) and shows(board, "E4"), all_text(board)
     tap(board, "back")
     first = [n for _t, _c, n, v in play_from_top(board, 800) if v]
     assert first[:8] == [60, 64, 62, 64, 60, 64, 62, 64], f"three steps still: the note on step 7 is silent: {first}"
@@ -2136,6 +2183,7 @@ CHECKS = {
     "mk2000 sequence": check_mk_sequence,
     "mk2000 patterns": check_mk_patterns,
     "mk2000 arp": check_mk_arp,
+    "mk2000 arp to seq": check_mk_arp_to_seq,
     "mk2000 step page": check_mk_step_page,
     "mk2000 track settings": check_mk_track_settings,
     "mk2000 global settings": check_mk_global_settings,

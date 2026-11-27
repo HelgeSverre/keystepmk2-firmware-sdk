@@ -137,8 +137,8 @@ not tried. Check 11 catches a phantom touch, but a touch controller that never a
 The display pattern: a frame one pixel wide on the outermost pixels all the way round; the
 digits `1` top left, `2` top right, `3` bottom left, `4` bottom right, in the SDK's own font;
 beside them two dotted vertical lines with every other row lit, which show a missing or doubled
-row as a gap or a blob; `Play=ok Stop=bad` in the small stock font; and `Display` in the large
-stock font, dark on a lit bar. Wrong orientation moves the digits, an offset cuts the frame.
+row as a gap or a blob; `Play=ok Stop=bad` in the small font; and `Display` in the large
+font, dark on a lit bar. Wrong orientation moves the digits, an offset cuts the frame.
 
 ### Optional
 

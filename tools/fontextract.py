@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
-"""Take the display fonts out of a stock firmware image for use with the SDK.
+"""Take the display fonts out of a stock firmware image, for analysis and the display reader.
 
     uv run tools/fontextract.py list                       # the fonts in stock 1.0.2
     uv run tools/fontextract.py show 0 "Tempo 120.0"       # preview a text in font 0
-    uv run tools/fontextract.py header -o sdk/build/generated/keystep_fonts.h
+    uv run tools/fontextract.py header -o stock_fonts.h      # a C header of them, for experiments
 
 The stock firmware carries its fonts as Windows .FNT version 2 raster fonts: a 118-byte header,
 a table of (width, offset) per character, then each glyph as columns of bytes, eight pixels wide
 and the font's height tall, most significant bit on the left.
 
-The fonts are Arturia's (and their designers'). The generated header is built from your own copy
-of the firmware and belongs in a build folder, not in a repository.
+The fonts are Arturia's (and their designers'): keep anything written from them out of the
+repository. The SDK's own fonts are made by tools/bdffont.py.
 """
 
 from __future__ import annotations

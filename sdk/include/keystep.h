@@ -32,9 +32,9 @@ void ks_oled_text(int x, int y, const char *s);                    /* 8 x 8 font
 void ks_oled_text_big(int x, int y, const char *s);                /* the same font at 16 x 16 */
 void ks_oled_flush(void);
 
-/* Proportional fonts. The stock firmware's two fonts can be used by including "keystep_fonts.h",
- * which the build generates from your copy of the stock image (ks_font_small: 9 pixels tall,
- * ks_font_large: 15). Only set pixels are drawn, so text can go over a filled area. */
+/* Proportional fonts. "keystep_fonts.h" has two, laid out like the stock firmware's
+ * (ks_font_small: 10 rows, ks_font_large: 15; sdk/README.md, Fonts). Only set pixels are drawn, so
+ * text can go over a filled area. */
 typedef struct {
     uint8_t height, ascent, first, last;        /* pixels; the first and last character codes */
     const uint16_t *offsets;                    /* per character: where its glyph starts in bits */

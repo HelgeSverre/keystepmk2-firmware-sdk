@@ -59,8 +59,8 @@ Flashing is safe once two things are known:
    firmware never uses, unless the firmware lifts the guard). USB MIDI with the stock identity
    and the update request (so a flashed SDK firmware can be replaced without the Tempo button),
    the SysEx version reply, CV,
-   gate, sync, aftertouch and pedal as raw values, and optional use of the stock fonts
-   (`tools/fontextract.py`). Missing: the 37-key model. Checked on a unit with
+   gate, sync, aftertouch and pedal as raw values, and two proportional display fonts
+   laid out like the stock ones (`tools/bdffont.py`). Missing: the 37-key model. Checked on a unit with
    `sdk/examples/selftest`, all but MIDI DIN, CV, gate, sync, flash erase and write (used by
    MK2000 on the unit) and `ks_store` ([SELFTEST.md](SELFTEST.md)).
    Tools around it: `tools/ksflash.py` (flash, read back, verify; used on a unit, see

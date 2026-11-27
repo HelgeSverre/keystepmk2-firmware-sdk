@@ -111,7 +111,19 @@ static void end_notes(void) {
     sounding = 0;
 }
 
+static mk_step *capture;        /* mk_arp_render: the step's notes go here and are not sounded */
+
 static void note_on(int pitch, uint8_t velocity) {
+    if (capture) {
+        for (int i = 0; i < MK_POLY && pitch >= 1 && pitch <= 127; i++) {
+            if (capture->note[i] == pitch) return;
+            if (capture->note[i]) continue;
+            capture->note[i] = (uint8_t)pitch;
+            capture->velocity[i] = velocity;
+            return;
+        }
+        return;
+    }
     if (pitch < 0 || pitch > 127 || sounding >= KEYS) return;
     for (int i = 0; i < sounding; i++)
         if (on[i] == pitch) return;     /* never the same note on twice */
@@ -219,6 +231,32 @@ static void play_step(void) {
         play_key(sorted[k % n], oct);
     }
     restart = 0;
+}
+
+/* The pattern from its beginning, a step of `out` for each step of the arp, without sounding it
+ * or moving where the arp is. As many steps as Arp Length; with Arp Retrigger off, once round
+ * the set (sixteen steps of Random). */
+int mk_arp_render(mk_step *out, int max) {
+    if (!settings || !held || max < 1) return 0;
+    lock();
+    uint8_t was_restart = restart, was_oct = oct, was_last = last, was_falling = falling, was_steps = steps;
+    int8_t was_pos = pos;
+    int places = held * octaves_of(), mode = mode_of();
+    int count = !settings->free_run            ? length_of()
+                : mode == MK_ARP_POLY          ? octaves_of()
+                : mode == MK_ARP_RANDOM        ? 16
+                : mode == MK_ARP_UP_DOWN && places > 1 ? 2 * places - 2
+                                               : places;
+    if (count > max) count = max;
+    restart = 1;
+    for (int s = 0; s < count; s++) {
+        capture = &out[s];
+        play_step();
+    }
+    capture = 0;
+    restart = was_restart, oct = was_oct, last = was_last, falling = was_falling, steps = was_steps, pos = was_pos;
+    unlock();
+    return count;
 }
 
 /* ---- the grid ---- */
