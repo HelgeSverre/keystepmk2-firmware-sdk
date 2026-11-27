@@ -1,0 +1,39 @@
+; WinUSB for the KeyStep mk2's firmware-updater interface (application) and its update mode.
+; The MIDI interface keeps Windows' own driver.
+[Version]
+Signature   = "$Windows NT$"
+Class       = USBDevice
+ClassGUID   = {88BAE032-5A81-49f0-BC3D-A4FF138216D6}
+Provider    = %Provider%
+CatalogFile = keystep-winusb.cat
+DriverVer   = 11/27/2026,1.0.0.0
+
+[Manufacturer]
+%Provider% = Devices, NTamd64, NTarm64
+
+[Devices.NTamd64]
+%App%    = Install, USB\VID_1C75&PID_0228&MI_00
+%Update% = Install, USB\VID_1C75&PID_0228&REV_0200
+
+[Devices.NTarm64]
+%App%    = Install, USB\VID_1C75&PID_0228&MI_00
+%Update% = Install, USB\VID_1C75&PID_0228&REV_0200
+
+[Install]
+Include = winusb.inf
+Needs   = WINUSB.NT
+
+[Install.Services]
+Include = winusb.inf
+Needs   = WINUSB.NT.Services
+
+[Install.HW]
+AddReg = Dev_AddReg
+
+[Dev_AddReg]
+HKR,,DeviceInterfaceGUIDs,0x10000,"{5B2C1A3E-6F0D-4E7A-9C51-2B8E4D7F0A63}"
+
+[Strings]
+Provider = "keystepmk2-firmware-sdk"
+App      = "KeyStep mk2 firmware updater (WinUSB)"
+Update   = "KeyStep mk2 update mode (WinUSB)"

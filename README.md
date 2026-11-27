@@ -114,6 +114,13 @@ MinGW has no address sanitizer, so on Windows MK2000's host tests run without on
 pins Python 3.14 in `.python-version` because `littlefs-python` has no Windows build for newer
 versions yet.
 
+To flash from Windows, also install libusb (`pacman -S mingw-w64-ucrt-x86_64-libusb`) and
+give the unit WinUSB. Run `tools\windows\install-winusb.ps1` from an elevated PowerShell. It binds
+WinUSB to the "Firmware Updater" interface (`MI_00`) and to update mode (`REV_0200`), and leaves
+MIDI on Windows' own driver. [Zadig](https://zadig.akeo.ie) does the same by hand, once in each
+mode. On Windows, MIDI answered, `just probe` read the unit, and `just flash mk2000` sent,
+verified and started MK2000. The unit was attached over USB/IP rather than plugged in.
+
 ## What is where
 
 | Path | Contents |
@@ -143,6 +150,7 @@ versions yet.
 | `tools/fontextract.py` | Reads the stock display fonts out of an image, for analysis and the display reader |
 | `tools/bdffont.py` | Makes the SDK's two display fonts from the X11 bitmaps in `sdk/third_party/x11-adobe` |
 | `tools/panel.py` | A window that looks like the KeyStep, on top of the emulator |
+| `tools/windows/` | WinUSB driver package for flashing from Windows |
 | `sdk/` | C SDK: start-up code, board drivers and examples, for the emulator and a unit ([README](sdk/README.md)) |
 | `ghidra/names-1.0.2.tsv` | Names for identified functions |
 | `ghidra/` | Headless Ghidra pipeline: import, function seeding, export, version diff |
