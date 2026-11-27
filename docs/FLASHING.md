@@ -1,7 +1,7 @@
 # Flashing a KeyStep mk2
 
 How to put firmware on a unit, check it, and get back to stock. Everything under "What is known
-to work" was done on one 32-key unit on 2026-11-24 and 25 ([BOOTLOADER.md](BOOTLOADER.md), "Seen
+to work" was done on one 32-key unit between 2026-11-24 and 27 ([BOOTLOADER.md](BOOTLOADER.md), "Seen
 on a device"). What the bootloader checks, and the "never send" list, are read from its code
 ([BOOTLOADER.md](BOOTLOADER.md), "The bootloader, read"); only upload block 1 was seen on the unit.
 
@@ -17,6 +17,11 @@ on a device"). What the bootloader checks, and the "never send" list, are read f
 | Check what is in flash | `ksflash.py verify IMAGE`, and every `flash` before it leaves update mode |
 | Copy the external flash | `sdk/examples/flashdump` + `tools/flashdump.py receive` |
 | Copy the bootloader | `sdk/examples/bootdump`, the same way |
+| Flash from Linux | `ksflash.py` on Ubuntu 24.04: `mk2000`, then stock, both verified |
+| Flash from Windows | `ksflash.py` on Windows Server 2022 with WinUSB ([README](../README.md#linux-and-windows)): `mk2000`, verified. The unit was attached over USB/IP, not plugged in |
+
+macOS needs no driver. Linux needs `sudo` or a udev rule, and Windows needs WinUSB on the unit;
+the README's [Linux and Windows](../README.md#linux-and-windows) section has both.
 
 ## Commands
 
@@ -51,8 +56,10 @@ firmware leaves the unit in update mode: switch it off and on afterwards.
   version if you want a particular one).
 - An update that is cut short leaves the unit in update mode at the next power-on by itself:
   the bootloader erases its "valid image" mark before it erases the old image and writes the
-  mark only after the whole new image has passed its check. Read from the code; not tried on a
-  unit.
+  mark only after the whole new image has passed its check. Read from the code. Seen once on
+  2026-11-27: a download that stopped partway on a USB timeout left the unit in update mode, and
+  the next `just flash-stock` wrote and verified stock. The unit was not switched off in between,
+  so the power-on part is still untried.
 
 ## What the bootloader checks
 

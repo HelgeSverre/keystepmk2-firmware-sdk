@@ -22,7 +22,8 @@ reading: aftertouch and the pedal were on each other's inputs. It is corrected.
 
 ## Requirements
 
-- `arm-none-eabi-gcc` and `arm-none-eabi-binutils` (Homebrew formulas of the same names)
+- `arm-none-eabi-gcc` and `arm-none-eabi-binutils` (Homebrew formulas of the same names; Linux and
+  Windows packages are in the [repository README](../README.md#linux-and-windows))
 - `uv`, which runs the packaging, emulator and window tools in `../tools`
 
 ## Use

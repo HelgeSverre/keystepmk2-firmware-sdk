@@ -241,6 +241,22 @@ unit.
   sectors, and **nothing in `0x41000`-`0x5FFFF`**: the area the SDK keeps to is untouched by the
   stock firmware on this unit, as read from its code.
 
+### From Linux and Windows, and a download cut short
+
+2026-11-27, same unit. It was passed to an Ubuntu 24.04 VM and, from there over USB/IP, to
+Windows Server 2022.
+
+- `bcdDevice` tells the modes apart, since both use `1C75:0228`: `0x1002` for stock 1.0.2,
+  `0x1009` for MK2000, and `0x0200` in update mode. On Windows that gives the hardware ids
+  `REV_1002`, `REV_1009` and `REV_0200`, which `tools/windows/keystep-winusb.inf` matches on.
+- Entered with `0xF2`, update mode keeps the serial of the firmware that asked for it: MK2000's
+  `0123456789ABCDEF`, stock's own serial from stock.
+- Linux flashed MK2000 and then stock; both were verified and started. Windows flashed MK2000,
+  verified it, and MK2000 started.
+- A download from Windows stopped at its start on a USB timeout: the USB/IP link dropped. The
+  unit stayed in update mode, answered standard requests, and the next flash, from Linux, wrote and
+  verified stock 1.0.2.
+
 
 ## The bootloader, read
 
