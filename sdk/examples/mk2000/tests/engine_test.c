@@ -955,7 +955,7 @@ static void test_offsets(void) {
             uint32_t got[4];
             int n = collect(ON, 0, 61, got, 4);
             CHECK_EQ(n, 2);
-            if (n == 2 && (got[0] != want || got[1] != last))
+            if (n == 2 && ((long)got[0] != want || (long)got[1] != last))
                 CHECK_EQ(got[0] * 1000 + got[1], want * 1000 + last);
             CHECK_EQ(count(ON, 0), 4);
         }
@@ -1263,7 +1263,7 @@ static void test_offsets_every_step(void) {
                 int index = k % cycle;
                 int step = tr->direction == MK_DIR_REVERSE ? n - 1 - index
                          : tr->direction == MK_DIR_PENDULUM && index >= n ? 2 * (n - 1) - index : index;
-                if (e->a != 40 + step || e->tick != expected_start(tr, k, step)) {
+                if (e->a != 40 + step || (long)e->tick != expected_start(tr, k, step)) {
                     printf("%s:%d: trial %d track %d step %d of the run: step %d at %u, expected step %d at %ld\n",
                            __FILE__, __LINE__, trial, t, k, e->a - 40, e->tick, step, expected_start(tr, k, step));
                     failures++;

@@ -27,8 +27,9 @@ anything.
 ## Quick start
 
 Requires `arm-none-eabi-gcc`, [`uv`](https://docs.astral.sh/uv/) and
-[`just`](https://github.com/casey/just) 1.27 or later, and libusb to flash. Developed on macOS;
-nothing in it is macOS-only, and Linux is untried.
+[`just`](https://github.com/casey/just) 1.27 or later, and libusb to flash. It builds and passes
+`just test` on macOS, Linux and Windows; [Linux and Windows](#linux-and-windows) lists what
+differs there.
 
 ```sh
 brew install arm-none-eabi-gcc uv just libusb     # macOS
@@ -54,9 +55,9 @@ then starts it. Before the first flash, copy your unit's external flash as
 |---|---|
 | Every recipe | [`just`](https://github.com/casey/just) 1.27 or later and [`uv`](https://docs.astral.sh/uv/) (it installs Python and the packages) |
 | Building SDK apps | `arm-none-eabi-gcc` (macOS: `brew install arm-none-eabi-gcc`; Debian and Ubuntu: `gcc-arm-none-eabi`) |
-| `just test` | also a host C compiler with the address and undefined-behaviour sanitizers (clang or gcc) |
+| `just test` | also a host C compiler (clang or gcc); the sanitizers are used where the compiler has them |
 | `just host`, `just shot` | a desktop: the window is pygame |
-| `just flash`, `just probe`, `just verify` | libusb (macOS: `brew install libusb`) |
+| `just flash`, `just probe`, `just verify` | libusb (macOS: `brew install libusb`; Linux: `libusb-1.0-0`) |
 | `just analyze` | Ghidra and a JDK; set `GHIDRA_HOME` and `JAVA_HOME` if they are not where Homebrew puts them |
 
 Arturia's firmware is not in this repository. Every SDK app, MK2000 included, builds from a fresh
@@ -77,6 +78,41 @@ just sim stock --ms 5000 --script "2500 tap=seq; 4000 show"   # the same without
 just check            # lint and build every app
 just analyze 1.0.4    # decompile one (needs Ghidra and a JDK)
 ```
+
+### Linux and Windows
+
+Tested on Ubuntu 24.04 (arm64) and Windows Server 2022 (x64).
+
+**Linux.** Ubuntu's `just` is too old; install it through uv.
+
+```sh
+sudo apt install git make curl gcc-arm-none-eabi libnewlib-arm-none-eabi clang libusb-1.0-0
+curl -LsSf https://astral.sh/uv/install.sh | sh
+uv tool install rust-just
+```
+
+For `just flash` and `just probe`, either run them with `sudo` or give your user the device:
+
+```sh
+echo 'SUBSYSTEM=="usb", ATTR{idVendor}=="1c75", MODE="0666"' | sudo tee /etc/udev/rules.d/50-keystep.rules
+sudo udevadm control --reload
+```
+
+The MIDI recipes need the ALSA sequencer (`sudo modprobe snd-seq-midi`) and your user in the
+`audio` group. On Linux, MK2000 was built, flashed to a unit and run, and the unit was flashed
+back to stock.
+
+**Windows.** Build tools come from [MSYS2](https://www.msys2.org); Python and `just` come from
+uv. Run the recipes from PowerShell or cmd with MSYS2's `ucrt64\bin` and `usr\bin` on `PATH`
+(`just` needs `sh` and `make`).
+
+```sh
+pacman -S make git mingw-w64-ucrt-x86_64-arm-none-eabi-gcc mingw-w64-ucrt-x86_64-arm-none-eabi-newlib mingw-w64-ucrt-x86_64-clang
+```
+
+MinGW has no address sanitizer, so on Windows MK2000's host tests run without one. The repository
+pins Python 3.14 in `.python-version` because `littlefs-python` has no Windows build for newer
+versions yet.
 
 ## What is where
 

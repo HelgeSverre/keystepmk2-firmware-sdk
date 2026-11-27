@@ -1,6 +1,8 @@
 # Host tests for the parts of MK2000 that touch no hardware. Run: make -C sdk/examples/mk2000/tests
 CC     ?= cc
-CFLAGS := -std=c11 -Wall -Wextra -Werror -O1 -g -fsanitize=address,undefined -I.. -I../../../include
+# The address and undefined-behaviour sanitizers where the compiler has them (MinGW's gcc does not).
+SAN    := $(shell echo 'int main(void) { return 0; }' | $(CC) -x c - -fsanitize=address,undefined -o /dev/null 2>/dev/null && echo -fsanitize=address,undefined)
+CFLAGS := -std=c11 -Wall -Wextra -Werror -O1 -g $(SAN) -I.. -I../../../include
 OUT    := ../../../build/mk2000-tests
 
 all: engine store arp clock harmony mutate
